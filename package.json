@@ -1,0 +1,71 @@
+{
+  "name": "react-native-theme-transition",
+  "version": "1.0.0",
+  "description": "Smooth animated theme transitions for React Native. Runs on the UI thread via Reanimated and is 100% compatible with Expo Go.",
+  "source": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "react-native": "./src/index.ts",
+  "exports": {
+    ".": {
+      "react-native": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE",
+    "!**/__tests__",
+    "!**/.*"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "tsc",
+    "release": "npm publish --provenance --access public"
+  },
+  "keywords": [
+    "react-native",
+    "react",
+    "ios",
+    "android",
+    "theme",
+    "dark-mode",
+    "light-mode",
+    "switch",
+    "toggle",
+    "appearance",
+    "animation",
+    "transition",
+    "view-transition",
+    "reanimated",
+    "screenshot",
+    "overlay",
+    "expo",
+    "expo-go",
+    "fabric",
+    "new-architecture"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marioprieta/react-native-theme-transition"
+  },
+  "bugs": {
+    "url": "https://github.com/marioprieta/react-native-theme-transition/issues"
+  },
+  "homepage": "https://github.com/marioprieta/react-native-theme-transition#readme",
+  "author": "Mario Prieta",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-gesture-handler": ">=2.0.0",
+    "react-native-reanimated": ">=3.0.0",
+    "react-native-view-shot": ">=3.0.0"
+  }
+}
