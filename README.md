@@ -1,40 +1,50 @@
 # react-native-theme-transition
 
-[![npm version](https://img.shields.io/npm/v/react-native-theme-transition)](https://www.npmjs.com/package/react-native-theme-transition)
-[![npm downloads](https://img.shields.io/npm/dm/react-native-theme-transition)](https://www.npmjs.com/package/react-native-theme-transition)
-[![license](https://img.shields.io/npm/l/react-native-theme-transition)](https://github.com/marioprieta/react-native-theme-transition/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/react-native-theme-transition.svg)](https://www.npmjs.com/package/react-native-theme-transition)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/react-native-theme-transition)](https://bundlephobia.com/package/react-native-theme-transition)
 ![expo compatible](https://img.shields.io/badge/Expo_Go-compatible-000.svg?logo=expo&logoColor=white)
-![react native](https://img.shields.io/badge/React_Native-0.72+-61DAFB.svg?logo=react&logoColor=white)
+![react compiler](https://img.shields.io/badge/React_Compiler-compatible-blue.svg)
+[![license](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/marioprieta/react-native-theme-transition/blob/main/LICENSE)
 
-Smooth theme transitions for React Native using a screenshot-overlay technique. Captures the current UI, overlays it, switches all colors underneath, then fades out — covering **everything**: native headers, TextInputs, icons, third-party components. No flashes.
+Smooth, animated theme and dark mode transitions for React Native and Expo. 100% JS, 60 FPS, powered by Reanimated.
 
-Works in **Expo Go**. No native modules required.
+<!-- TODO: Replace with actual demo GIF (600x1300px, 30fps, <5MB) -->
+<!-- <p align="center">
+  <img src=".github/assets/demo.gif" alt="react-native-theme-transition demo" width="300" />
+</p> -->
 
-<!-- TODO: Add demo GIF/video captured with RocketSim -->
-<!-- ![Demo](./assets/demo.gif) -->
+<!-- TODO: Add Expo Snack link -->
+<!-- [![Try on Expo Snack](https://img.shields.io/badge/Try_it-Expo_Snack-blue.svg?logo=expo&logoColor=white)](https://snack.expo.dev/...) -->
+
+## Motivation
+
+Implementing smooth, app-wide theme transitions in React Native has historically required custom native iOS and Android modules. This approach alienates Expo Go users, breaks Over-The-Air (OTA) update pipelines, and adds significant maintenance overhead.
+
+`react-native-theme-transition` solves this entirely in the JavaScript and UI thread layers. It captures a screenshot of the current UI, overlays it, switches all colors underneath, then fades out the overlay — achieving flawless 60 FPS cross-fades without ever touching native bridges or requiring custom development clients.
+
+All peer dependencies (`react-native-reanimated`, `react-native-gesture-handler`, `react-native-view-shot`) are already included in Expo SDK 50+.
 
 ## Features
 
-- **Screenshot-overlay transitions** — every pixel transitions smoothly, including native elements
-- **Expo Go compatible** — uses `react-native-view-shot` (included in Expo SDK 50+)
-- **UI thread animation** — powered by `react-native-reanimated` for 60/120fps fades
-- **Full TypeScript** — generic inference for theme names and color tokens
-- **React Compiler ready** — clean hooks, no defensive memoization
-- **System theme** — built-in hook to follow OS light/dark preference
-- **Transition guard** — blocks concurrent transitions, exposes `isTransitioning` for UI control
-- **Minimal API** — one factory, one provider, two hooks
+- **Expo Go compatible** — zero native code or prebuilds required
+- **Full theme management** — Provider, typed hooks, and deep generic inference
+- **60 FPS animations** — fade runs entirely on the UI thread via Reanimated
+- **System theme sync** — automatically transitions when OS appearance changes
+- **React Compiler ready** — no manual `useMemo` or `useCallback` needed
+- **Transition guard** — blocks concurrent transitions, exposes `isTransitioning`
+- **Tiny footprint** — ~12 kB compressed, zero runtime dependencies
 
-## Install
+## Installation
 
 ```bash
-# Expo (recommended — resolves compatible versions automatically)
+# Expo (recommended)
 npx expo install react-native-theme-transition react-native-reanimated react-native-gesture-handler react-native-view-shot
 
 # React Native CLI
 yarn add react-native-theme-transition react-native-reanimated react-native-gesture-handler react-native-view-shot
 ```
 
-> **Note for CLI users:** Add `react-native-reanimated/plugin` to your `babel.config.js` and run `npx pod-install` for iOS.
+> **CLI users:** Add `react-native-reanimated/plugin` to your `babel.config.js` and run `npx pod-install` for iOS.
 
 ## Quick start
 
@@ -46,26 +56,27 @@ import { createAnimatedTheme } from 'react-native-theme-transition';
 
 const light = {
   background: '#ffffff',
-  card: '#f5f5f5',
-  text: '#000000',
-  primary: '#007AFF',
-};
+  card:       '#f5f5f5',
+  text:       '#000000',
+  primary:    '#007AFF',
+} as const;
 
 const dark = {
   background: '#000000',
-  card: '#1c1c1e',
-  text: '#ffffff',
-  primary: '#0A84FF',
-};
+  card:       '#1c1c1e',
+  text:       '#ffffff',
+  primary:    '#0A84FF',
+} as const;
 
-export const {
-  AnimatedThemeProvider,
-  useTheme,
-  useSystemTheme,
-} = createAnimatedTheme({
-  themes: { light, dark },
-  defaultTheme: 'light',
-});
+export const { AnimatedThemeProvider, useTheme, useSystemTheme } =
+  createAnimatedTheme({
+    themes: { light, dark },
+    defaultTheme: 'light',
+  });
+
+// TypeScript infers everything:
+// - Theme names: 'light' | 'dark'
+// - Color tokens: 'background' | 'card' | 'text' | 'primary'
 ```
 
 ### 2. Wrap your app
@@ -94,78 +105,78 @@ function MyScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Text style={{ color: colors.text }}>Current: {name}</Text>
       <Pressable
-        onPress={() => setTheme('dark')}
+        onPress={() => setTheme(name === 'light' ? 'dark' : 'light')}
         disabled={isTransitioning}
       >
-        <Text>Dark mode</Text>
+        <Text style={{ color: colors.primary }}>Toggle theme</Text>
       </Pressable>
     </View>
   );
 }
 ```
 
-## How it works
+## API reference
 
-1. `setTheme('dark')` is called
-2. Waits one frame for pending renders to commit
-3. Captures a screenshot of the entire view hierarchy via `captureRef`
-4. Shows the screenshot as a full-screen overlay (opacity 1)
-5. Switches all color tokens instantly underneath
-6. Waits for React to re-render with new colors
-7. Fades the overlay out (default 350ms) on the UI thread via Reanimated
+### `createAnimatedTheme(config)`
 
-The screenshot is captured **before** the color switch, so the overlay is visually identical to the current screen. When the overlay fades, it reveals the fully re-rendered new theme underneath — no partial states, no flashes.
-
-If `setTheme` is called during an ongoing transition, the call is **ignored** until the current transition completes. Use `isTransitioning` to disable UI controls during this window.
-
-## Configuration
+Factory function that returns a Provider and hooks scoped to your theme definitions.
 
 ```ts
 createAnimatedTheme({
-  themes: { light, dark },        // All themes must have identical keys
+  themes: { light, dark },      // All themes must have identical keys
   defaultTheme: 'light',
-  duration: 350,                   // Fade duration in ms (default: 350)
-  onTransitionEnd: (name) => {},   // Called when transition finishes
+  duration: 350,                 // Fade duration in ms (default: 350)
+  onTransitionEnd: (name) => {}, // Called when a transition completes
 });
 ```
 
-## Hooks
+Returns `{ AnimatedThemeProvider, useTheme, useSystemTheme }`.
 
 ### `useTheme()`
 
-Returns everything you need in a single hook.
+| Property | Type | Description |
+|---|---|---|
+| `colors` | `Record<TokenName, string>` | Current theme's color tokens, fully typed |
+| `name` | `ThemeName` | Active theme name (e.g. `'light'`, `'dark'`) |
+| `setTheme` | `(name, options?) => void` | Triggers a theme transition |
+| `isTransitioning` | `boolean` | `true` during the animation window |
+
+#### `setTheme` options
 
 ```ts
-const { colors, name, setTheme, isTransitioning } = useTheme();
-```
-
-| Property          | Type                                | Description                              |
-| ----------------- | ----------------------------------- | ---------------------------------------- |
-| `colors`          | `Record<TokenName, string>`         | Current theme's color tokens             |
-| `name`            | `ThemeName`                         | Active theme name (`'light'`, `'dark'`)  |
-| `setTheme`        | `(name, options?) => void`          | Trigger a theme transition               |
-| `isTransitioning` | `boolean`                           | `true` while a transition is in progress |
-
-Use `isTransitioning` to disable UI that triggers theme changes:
-
-```tsx
-<Pressable onPress={() => setTheme('dark')} disabled={isTransitioning}>
-  <Text>Dark mode</Text>
-</Pressable>
+setTheme('dark', {
+  onCaptured: () => {
+    // Fires after the screenshot overlay is visible.
+    // Useful for haptic feedback or analytics.
+  },
+});
 ```
 
 ### `useSystemTheme(enabled?, mapping?)`
 
-Subscribes to OS appearance changes and automatically triggers transitions.
+Subscribes to OS appearance changes and triggers transitions automatically.
 
 ```ts
-useSystemTheme(colorMode === 'system');
+// Follow system theme
+useSystemTheme(true);
 
-// Custom mapping
-useSystemTheme(true, { light: 'day', dark: 'midnight' });
+// Custom mapping (e.g. theme names that don't match 'light'/'dark')
+useSystemTheme(true, { light: 'sunrise', dark: 'midnight' });
 ```
 
-## Integration with Zustand
+## Recipes
+
+### Haptic feedback on theme switch
+
+```tsx
+import * as Haptics from 'expo-haptics';
+
+setTheme('dark', {
+  onCaptured: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+});
+```
+
+### Integration with Zustand
 
 ```tsx
 function ThemeBridge() {
@@ -182,19 +193,81 @@ function ThemeBridge() {
 }
 ```
 
+### React Navigation theme sync
+
+```tsx
+import { useTheme } from './theme';
+
+function App() {
+  const { colors, name } = useTheme();
+
+  const navigationTheme = {
+    dark: name === 'dark',
+    colors: {
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.card,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.primary,
+    },
+  };
+
+  return (
+    <NavigationContainer theme={navigationTheme}>
+      {/* ... */}
+    </NavigationContainer>
+  );
+}
+```
+
+## How it works
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Hook as setTheme()
+    participant Shot as ViewShot
+    participant React as React Tree
+    participant UI as UI Thread
+
+    User->>Hook: setTheme('dark')
+    Hook->>Shot: Wait 1 frame, capture screen
+    Shot-->>Hook: Return image URI
+    Hook->>UI: Mount opaque overlay (screenshot)
+    Hook->>React: Update color tokens
+    React-->>React: Re-render with new theme (~2 frames)
+    Hook->>UI: Fade overlay out (350ms via Reanimated)
+    UI-->>User: Smooth cross-fade complete
+```
+
+1. `setTheme('dark')` is called
+2. Waits one frame for pending renders to commit
+3. Captures a full-screen screenshot via `captureRef`
+4. Shows the screenshot as an opaque overlay
+5. Switches all color tokens instantly underneath
+6. Waits two frames for React to re-render with new colors
+7. Fades the overlay out (default 350ms) on the UI thread via Reanimated
+
+The screenshot is captured **before** the color switch, so the overlay is visually identical to the current screen. When it fades, it reveals the fully re-rendered new theme — no partial states, no flashes.
+
 ## Comparison
 
-| Feature                    | react-native-theme-transition | react-native-theme-switch-animation |
-| -------------------------- | :---------------------------: | :---------------------------------: |
-| Expo Go compatible         |               ✓               |                  ✗                  |
-| Animates native headers    |               ✓               |                  ✓                  |
-| Animates TextInput text    |               ✓               |                  ✓                  |
-| Zero native linking        |               ✓               |                  ✗                  |
-| Typed color tokens         |               ✓               |                  ✗                  |
-| Theme management (hooks)   |               ✓               |                  ✗                  |
-| System theme following     |               ✓               |                  ✗                  |
-| React Compiler compatible  |               ✓               |                  ✗                  |
-| New Architecture (Fabric)  |               ✓               |                  ✓                  |
+| Feature | react-native-theme-transition | react-native-theme-switch-animation |
+|---|:---:|:---:|
+| Expo Go support | ✅ | ❌ Requires prebuild |
+| Execution | Pure JS / Reanimated UI thread | Native modules (Java/ObjC) |
+| Theme state management | ✅ Provider + typed hooks | ❌ Bring your own |
+| TypeScript generics | ✅ Deep inference for tokens | ⚠️ Basic typings |
+| System theme listener | ✅ Built-in (`useSystemTheme`) | ❌ Not included |
+| React Compiler | ✅ Compatible | ❌ |
+| New Architecture (Fabric) | ✅ | ✅ |
+
+## Known limitations
+
+- **Gesture blocking during transitions** — During the fade animation (default 350ms), an invisible layer blocks touch and scroll events. This is an intentional architectural decision: since the user sees a static screenshot overlay, allowing scroll would cause the underlying UI to move invisibly, creating visual dissonance when the overlay fades. This brief interruption mirrors standard iOS and Android OS-level transition behavior and is imperceptible in normal usage.
+
+- **Sequential transitions only** — If `setTheme` is called during an ongoing transition, the call is silently ignored. Use `isTransitioning` to disable toggle buttons during this window.
 
 ## Requirements
 
@@ -203,6 +276,10 @@ function ThemeBridge() {
 - react-native-gesture-handler >= 2.0.0
 - react-native-view-shot >= 3.0.0
 
+## Contributing
+
+Contributions are welcome! Please open an issue first to discuss what you'd like to change.
+
 ## License
 
-MIT
+[MIT](./LICENSE) © [Mario Prieta](https://github.com/marioprieta)
