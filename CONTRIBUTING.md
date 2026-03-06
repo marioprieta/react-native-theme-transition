@@ -73,7 +73,7 @@ Use clear, descriptive commit messages:
 ```
 fix: prevent double transition when setTheme called rapidly
 feat: add onTransitionStart callback
-docs: clarify useSystemTheme mapping parameter
+docs: clarify systemThemeMap configuration
 ```
 
 ## Code style

@@ -25,6 +25,21 @@ export type TokenNames<T extends Record<string, ThemeDefinition>> =
   keyof T[ThemeNames<T>] & string;
 
 /**
+ * Maps OS color schemes (`'light'` / `'dark'`) to theme names.
+ *
+ * @remarks
+ * Used by {@link ThemeTransitionConfig.systemThemeMap} to resolve
+ * `Appearance.getColorScheme()` into a concrete theme name when the provider
+ * is in system mode (`initialTheme="system"` or `setTheme('system')`).
+ *
+ * Only required when your themes are not named `'light'` and `'dark'`.
+ *
+ * @typeParam Names - Union of theme name strings.
+ */
+export type SystemThemeMap<Names extends string> =
+  Partial<Record<'light' | 'dark', Names>>;
+
+/**
  * Configuration for {@link createThemeTransition}.
  *
  * @typeParam T - Your application's theme map, keyed by theme name.
@@ -36,6 +51,7 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    * @remarks
    * Every theme must share the exact same token keys. Mismatched keys
    * cause a runtime error at initialization.
+   * The name `'system'` is reserved and cannot be used as a theme name.
    */
   themes: T;
 
@@ -47,6 +63,22 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    * @default 350
    */
   duration?: number;
+
+  /**
+   * Maps OS appearance (`'light'` / `'dark'`) to theme names.
+   *
+   * @remarks
+   * Required when your themes are not literally named `'light'` and `'dark'`
+   * and you want to use system mode (`initialTheme="system"` or
+   * `setTheme('system')`). Without this map, the provider uses the OS scheme
+   * value directly as a theme name.
+   *
+   * @example
+   * ```ts
+   * systemThemeMap: { light: 'sunrise', dark: 'midnight' }
+   * ```
+   */
+  systemThemeMap?: SystemThemeMap<ThemeNames<T>>;
 
   /**
    * Called after a theme transition completes and the overlay is removed.
@@ -65,8 +97,8 @@ export interface SetThemeOptions {
    *
    * @remarks
    * When `false`, the theme switches instantly without capturing a screenshot
-   * or showing an overlay. Useful for system theme changes that happen while
-   * the app is in the background.
+   * or showing an overlay. Useful for restoring a persisted theme at startup
+   * or syncing from an external store.
    *
    * @default true
    */
@@ -76,9 +108,9 @@ export interface SetThemeOptions {
    * Called after the screenshot is captured, just before the theme switch is applied.
    *
    * @remarks
-   * At this point the screenshot will be displayed as a static overlay on the
-   * next frame — ideal for triggering haptic feedback or logging analytics.
-   * Only called when `animated` is `true` (the default).
+   * Runs synchronously on the JS thread right after capture. Keep callbacks
+   * lightweight (haptics, analytics) — expensive work here delays the
+   * visual transition. Only called when `animated` is `true` (the default).
    */
   onCaptured?: () => void;
 }
@@ -94,10 +126,17 @@ export interface ThemeTransitionContextValue<
 > {
   /** Current resolved color values for all tokens. */
   colors: Record<Tokens, string>;
-  /** Name of the currently active theme. */
+  /** Name of the currently active theme (resolved, never `'system'`). */
   name: Names;
-  /** Switch to a new theme, optionally with transition callbacks. */
-  setTheme: (name: Names, options?: SetThemeOptions) => void;
+  /**
+   * Switch to a new theme or enter system mode.
+   *
+   * @remarks
+   * Pass a theme name for a direct switch, or `'system'` to follow the OS
+   * appearance. In system mode, the provider subscribes to
+   * `Appearance.addChangeListener` and syncs on `AppState` foreground return.
+   */
+  setTheme: (name: Names | 'system', options?: SetThemeOptions) => void;
   /** `true` while a cross-fade transition overlay is visible. */
   isTransitioning: boolean;
 }
@@ -122,8 +161,21 @@ export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
    */
   ThemeTransitionProvider: React.FC<{
     children: React.ReactNode;
-    /** Optional initial theme; defaults to {@link ThemeTransitionConfig.defaultTheme}. */
-    initialTheme?: ThemeNames<T>;
+    /**
+     * Initial theme or system mode.
+     *
+     * @remarks
+     * Pass a theme name to start with that theme, or `'system'` to read the
+     * OS appearance synchronously on the first frame (zero-flash) and subscribe
+     * to system changes for the lifetime of the provider.
+     *
+     * When `'system'` is used with custom theme names, provide
+     * {@link ThemeTransitionConfig.systemThemeMap | systemThemeMap} in the
+     * factory config to map `'light'`/`'dark'` to your theme names.
+     *
+     * Defaults to {@link ThemeTransitionConfig.defaultTheme} when omitted.
+     */
+    initialTheme?: ThemeNames<T> | 'system';
   }>;
 
   /**
@@ -131,36 +183,26 @@ export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
    *
    * @returns An object with `colors`, `name`, `setTheme`, and `isTransitioning`.
    *
-   * @throws If called outside an `ThemeTransitionProvider`.
+   * @throws If called outside a `ThemeTransitionProvider`.
    */
   useTheme: () => {
     /** Resolved color values for every token in the active theme. */
     colors: { [K in TokenNames<T>]: string };
-    /** Name of the currently active theme. */
+    /** Name of the currently active theme (resolved, never `'system'`). */
     name: ThemeNames<T>;
     /**
-     * Switch to a different theme with an animated cross-fade.
+     * Switch to a different theme or enter system mode.
      *
-     * @param name - Target theme name.
+     * @remarks
+     * Pass a theme name for a direct switch with animated cross-fade,
+     * or `'system'` to follow the OS appearance. When in system mode,
+     * calling `setTheme` with a specific theme name exits system mode.
+     *
+     * @param name - Target theme name or `'system'`.
      * @param options - Optional transition callbacks.
      */
-    setTheme: (name: ThemeNames<T>, options?: SetThemeOptions) => void;
+    setTheme: (name: ThemeNames<T> | 'system', options?: SetThemeOptions) => void;
     /** `true` while a cross-fade transition is in progress. */
     isTransitioning: boolean;
   };
-
-  /**
-   * Hook that syncs the active theme with the system appearance (light/dark).
-   *
-   * @param enabled - When `true` or omitted, subscribes to OS appearance changes.
-   *   Pass `false` explicitly to deactivate the listener.
-   * @param mapping - Maps system appearance to theme names. Falls back to
-   *   using the appearance value (`'light'`/`'dark'`) as the theme name.
-   *
-   * @throws If called outside an `ThemeTransitionProvider`.
-   */
-  useSystemTheme: (
-    enabled?: boolean,
-    mapping?: Partial<Record<'light' | 'dark', ThemeNames<T>>>,
-  ) => void;
 }
