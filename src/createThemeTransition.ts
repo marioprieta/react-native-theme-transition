@@ -60,6 +60,16 @@ export function createThemeTransition<
     }
   }
 
+  if (config.systemThemeMap) {
+    for (const [scheme, name] of Object.entries(config.systemThemeMap)) {
+      if (!(name in config.themes)) {
+        throw new Error(
+          `[react-native-theme-transition] \`systemThemeMap.${scheme}\` maps to "${name}" which does not exist in themes.`,
+        );
+      }
+    }
+  }
+
   const { Context, ThemeTransitionProvider } = createProviderAndContext(config);
 
   return {

@@ -21,6 +21,4 @@ export type {
   SystemThemeMap,
   SetThemeOptions,
   ThemeDefinition,
-  ThemeNames,
-  TokenNames,
 } from './types';

@@ -55,6 +55,15 @@ function waitFrames(n: number): Promise<void> {
 }
 
 /**
+ * Returns the current OS color scheme, defaulting to `'light'` when unavailable.
+ *
+ * @internal
+ */
+function getScheme(colorScheme?: string | null): 'light' | 'dark' {
+  return (colorScheme ?? 'light') as 'light' | 'dark';
+}
+
+/**
  * Maps an OS color scheme to a theme name.
  *
  * @internal
@@ -74,7 +83,12 @@ function resolveScheme<Names extends string>(
 export function createProviderAndContext<
   T extends Record<string, ThemeDefinition>,
 >(config: ThemeTransitionConfig<T>) {
-  const { themes, duration = 350, onThemeChange, systemThemeMap } = config;
+  const {
+    themes, duration = 350, systemThemeMap,
+    onTransitionStart: configOnTransitionStart,
+    onTransitionEnd: configOnTransitionEnd,
+    onThemeChange,
+  } = config;
 
   type Names = ThemeNames<T>;
   type Tokens = TokenNames<T>;
@@ -93,7 +107,7 @@ export function createProviderAndContext<
     initialTheme: Names | 'system';
   }) {
     const isInitialSystem = initialTheme === 'system';
-    const startScheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
+    const startScheme = getScheme(Appearance.getColorScheme());
     const startTheme = isInitialSystem
       ? resolveScheme<Names>(startScheme, systemThemeMap)
       : initialTheme;
@@ -138,12 +152,11 @@ export function createProviderAndContext<
       };
     }, []);
 
-    const resetTransition = useCallback((name: Names) => {
+    const resetTransition = useCallback(() => {
       transitioningRef.current = false;
       isBlocking.value = false;
       setIsTransitioning(false);
       setOverlayUri(null);
-      onThemeChange?.(name);
     }, [isBlocking]);
 
     const transition = useCallback(async (name: Names, options?: SetThemeOptions<Names>) => {
@@ -165,8 +178,10 @@ export function createProviderAndContext<
 
         const finishTransition = () => {
           if (!mountedRef.current) return;
-          resetTransition(name);
+          resetTransition();
+          configOnTransitionEnd?.(name);
           options?.onTransitionEnd?.(name);
+          onThemeChange?.(name);
         };
 
         overlayOpacity.set(withTiming(0, { duration }, (finished) => {
@@ -181,60 +196,59 @@ export function createProviderAndContext<
         );
         if (!mountedRef.current) return;
         setResolved({ colors: getColors(name), name });
-        resetTransition(name);
+        resetTransition();
+        onThemeChange?.(name);
       }
     }, [isBlocking, overlayOpacity, resetTransition]);
 
-    const applyTheme = useCallback((name: Names, options?: SetThemeOptions<Names>) => {
-      if (name === targetRef.current) return;
+    const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions<Names>) => {
+      const resolved = name === 'system'
+        ? resolveScheme<Names>(getScheme(Appearance.getColorScheme()), systemThemeMap)
+        : name;
+
+      if (name === 'system') {
+        systemModeRef.current = true;
+      } else {
+        systemModeRef.current = false;
+      }
+
+      if (resolved === targetRef.current) return;
       if (transitioningRef.current) return;
 
-      targetRef.current = name;
+      targetRef.current = resolved;
 
       if (options?.animated === false) {
-        setResolved({ colors: getColors(name), name });
-        onThemeChange?.(name);
+        setResolved({ colors: getColors(resolved), name: resolved });
+        onThemeChange?.(resolved);
         return;
       }
 
-      options?.onTransitionStart?.(name);
+      configOnTransitionStart?.(resolved);
+      options?.onTransitionStart?.(resolved);
       transitioningRef.current = true;
       isBlocking.value = true;
 
       setIsTransitioning(true);
-      transition(name, options);
+      transition(resolved, options);
     }, [isBlocking, transition]);
-
-    const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions<Names>) => {
-      if (name === 'system') {
-        systemModeRef.current = true;
-        const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
-        applyTheme(resolveScheme<Names>(scheme, systemThemeMap), options);
-      } else {
-        systemModeRef.current = false;
-        applyTheme(name, options);
-      }
-    }, [applyTheme]);
 
     const appStateRef = useRef(AppState.currentState);
 
     useEffect(() => {
-      const appearanceSub = Appearance.addChangeListener(({ colorScheme }) => {
+      const appearanceSub = Appearance.addChangeListener(() => {
         if (!systemModeRef.current) return;
-        const scheme = (colorScheme ?? 'light') as 'light' | 'dark';
         if (appStateRef.current === 'active') {
-          applyTheme(resolveScheme<Names>(scheme, systemThemeMap));
+          setTheme('system');
         } else {
           // Instant while backgrounded so React state matches the iOS snapshot.
-          applyTheme(resolveScheme<Names>(scheme, systemThemeMap), { animated: false });
+          setTheme('system', { animated: false });
         }
       });
 
       // iOS can deliver a stale scheme during snapshot capture; re-read on foreground.
       const appSub = AppState.addEventListener('change', (next) => {
         if (appStateRef.current !== 'active' && next === 'active' && systemModeRef.current) {
-          const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
-          applyTheme(resolveScheme<Names>(scheme, systemThemeMap), { animated: false });
+          setTheme('system', { animated: false });
         }
         appStateRef.current = next;
       });
@@ -243,7 +257,7 @@ export function createProviderAndContext<
         appearanceSub.remove();
         appSub.remove();
       };
-    }, [applyTheme]);
+    }, [setTheme]);
 
     const value = useMemo(() => ({
       colors: resolved.colors, name: resolved.name, setTheme, isTransitioning,

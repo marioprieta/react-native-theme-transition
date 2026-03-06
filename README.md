@@ -149,7 +149,9 @@ const { ThemeTransitionProvider, useTheme } =
 | `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. The name `'system'` is reserved. |
 | `duration` | `number` | `350` | Fade-out animation duration in milliseconds. |
 | `systemThemeMap` | `{ light: ThemeName, dark: ThemeName }` | | Maps OS appearance to theme names. Required when your themes are not named `'light'` and `'dark'` and you want to use system mode. Both keys must be provided. |
-| `onThemeChange` | `(name: ThemeName) => void` | | Called whenever the active theme changes — animated, instant, or system-driven. For animated transitions, fires after the fade completes. |
+| `onTransitionStart` | `(name: ThemeName) => void` | | Called when an animated transition begins, before the screenshot capture. |
+| `onTransitionEnd` | `(name: ThemeName) => void` | | Called after an animated transition completes and the overlay is removed. |
+| `onThemeChange` | `(name: ThemeName) => void` | | Called whenever the active theme changes — animated, instant, or system-driven. For animated transitions, fires after `onTransitionEnd`. |
 
 #### Type inference
 
@@ -219,8 +221,8 @@ const { colors, name, setTheme, isTransitioning } = useTheme();
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `animated` | `boolean` | `true` | When `false`, switches instantly without animation. |
-| `onTransitionStart` | `(name: ThemeName) => void` | | Called when the animated transition begins, before the screenshot capture. Only fires when `animated` is `true` (the default). |
-| `onTransitionEnd` | `(name: ThemeName) => void` | | Called after the animated transition completes and the overlay is removed. Only fires when `animated` is `true` (the default). Fires after the config-level `onThemeChange`. |
+| `onTransitionStart` | `(name: ThemeName) => void` | | Called when the animated transition begins, before the screenshot capture. Only fires when `animated` is `true` (the default). Fires after the config-level `onTransitionStart`. |
+| `onTransitionEnd` | `(name: ThemeName) => void` | | Called after the animated transition completes and the overlay is removed. Only fires when `animated` is `true` (the default). Fires after the config-level `onTransitionEnd`. |
 
 ```ts
 setTheme('dark', {
@@ -243,8 +245,6 @@ import type {
   ThemeTransitionAPI,      // Return type of createThemeTransition
   SystemThemeMap,          // systemThemeMap type ({ light: ThemeName, dark: ThemeName })
   SetThemeOptions,         // Options for setTheme ({ animated, onTransitionStart, onTransitionEnd })
-  ThemeNames,              // Union of theme name strings
-  TokenNames,              // Union of color token strings
 } from 'react-native-theme-transition';
 ```
 

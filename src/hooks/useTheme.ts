@@ -33,6 +33,6 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
         '[react-native-theme-transition] `useTheme` must be used inside a `ThemeTransitionProvider`.',
       );
     }
-    return ctx as ThemeValue;
+    return ctx;
   };
 }

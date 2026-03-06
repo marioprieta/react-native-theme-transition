@@ -69,12 +69,32 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
   systemThemeMap?: SystemThemeMap<ThemeNames<T>>;
 
   /**
+   * Called when an animated transition begins, before the screenshot capture.
+   *
+   * @remarks
+   * Only fires for animated transitions (not instant or system-driven switches).
+   *
+   * @param themeName - The target theme name.
+   */
+  onTransitionStart?: (themeName: ThemeNames<T>) => void;
+
+  /**
+   * Called after an animated transition completes and the overlay is removed.
+   *
+   * @remarks
+   * Only fires for animated transitions (not instant or system-driven switches).
+   *
+   * @param themeName - The newly active theme name.
+   */
+  onTransitionEnd?: (themeName: ThemeNames<T>) => void;
+
+  /**
    * Called whenever the active theme changes.
    *
    * @remarks
    * Fires for all theme changes: animated transitions, instant switches,
    * and system-driven appearance changes. For animated transitions,
-   * fires after the fade completes.
+   * fires after `onTransitionEnd`.
    *
    * @param themeName - The newly active theme name.
    */
@@ -103,6 +123,7 @@ export interface SetThemeOptions<Names extends string = string> {
    *
    * @remarks
    * Only called when `animated` is `true` (the default).
+   * Fires after the config-level `onTransitionStart` (if provided).
    *
    * @param themeName - The target theme name.
    */
@@ -113,7 +134,7 @@ export interface SetThemeOptions<Names extends string = string> {
    *
    * @remarks
    * Only called when `animated` is `true` (the default).
-   * Fires after the config-level `onThemeChange` (if provided).
+   * Fires after the config-level `onTransitionEnd` (if provided).
    *
    * @param themeName - The newly active theme name.
    */
