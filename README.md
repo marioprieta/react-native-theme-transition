@@ -409,4 +409,4 @@ Contributions are welcome! Please read the [contributing guide](./CONTRIBUTING.m
 
 ## License
 
-[MIT](./LICENSE) © [Mario Prieta](https://github.com/marioprieta)
+react-native-theme-transition is licensed under [The MIT License](LICENSE).
