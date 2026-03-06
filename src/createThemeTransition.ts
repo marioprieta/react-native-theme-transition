@@ -19,7 +19,6 @@ import type {
 } from './types';
 import { createProviderAndContext } from './provider';
 import { createUseTheme } from './hooks/useTheme';
-import { createUseSystemTheme } from './hooks/useSystemTheme';
 
 /**
  * Creates a fully typed theme transition system.
@@ -45,6 +44,12 @@ export function createThemeTransition<
     throw new Error('[react-native-theme-transition] `themes` must contain at least one theme.');
   }
 
+  if ('system' in config.themes) {
+    throw new Error(
+      '[react-native-theme-transition] `"system"` is a reserved name and cannot be used as a theme key. Rename the theme and use `systemThemeMap` to map OS appearance to it.',
+    );
+  }
+
   if (!(config.defaultTheme in config.themes)) {
     throw new Error(
       `[react-native-theme-transition] \`defaultTheme\` "${config.defaultTheme}" does not exist in themes.`,
@@ -66,6 +71,5 @@ export function createThemeTransition<
   return {
     ThemeTransitionProvider,
     useTheme: createUseTheme<T>(Context),
-    useSystemTheme: createUseSystemTheme<T>(Context),
   };
 }

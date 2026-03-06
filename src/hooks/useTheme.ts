@@ -22,7 +22,7 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
   type ThemeValue = {
     colors: { [K in Tokens]: string };
     name: Names;
-    setTheme: (name: Names, options?: SetThemeOptions) => void;
+    setTheme: (name: Names | 'system', options?: SetThemeOptions) => void;
     isTransitioning: boolean;
   };
 
@@ -30,7 +30,7 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
     const ctx = useContext(Ctx);
     if (!ctx) {
       throw new Error(
-        '[react-native-theme-transition] `useTheme` must be used inside an `ThemeTransitionProvider`.',
+        '[react-native-theme-transition] `useTheme` must be used inside a `ThemeTransitionProvider`.',
       );
     }
     return ctx as ThemeValue;

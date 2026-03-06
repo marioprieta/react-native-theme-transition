@@ -1,20 +1,11 @@
 /**
  * Screenshot-overlay provider and context factory.
  *
- * @remarks
- * The provider renders three layers inside a single root `<View>`:
- * 1. **Children** — the app's live component tree.
- * 2. **Touch blocker** — an invisible `Animated.View` whose `pointerEvents`
- *    are driven by a Reanimated shared value, blocking all interaction
- *    within one native frame of `setTheme` being called.
- * 3. **Snapshot overlay** — an `<Animated.View>` containing the captured
- *    screenshot, faded from opaque to transparent via Reanimated.
- *
  * @module
  */
 
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, View } from 'react-native';
+import { Appearance, AppState, Image, View } from 'react-native';
 import Animated, {
   useAnimatedProps,
   useAnimatedStyle,
@@ -27,13 +18,14 @@ import type {
   ThemeTransitionConfig,
   ThemeTransitionContextValue,
   SetThemeOptions,
+  SystemThemeMap,
   ThemeDefinition,
   ThemeNames,
   TokenNames,
 } from './types';
 
 const FILL = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const;
-// flex: 1 instead of height: '100%' — avoids layout clipping on certain Android API levels.
+// Avoids layout clipping on certain Android API levels.
 const ROOT_STYLE = { flex: 1 } as const;
 
 /**
@@ -63,6 +55,18 @@ function waitFrames(n: number): Promise<void> {
 }
 
 /**
+ * Resolves the current OS color scheme to a theme name using an optional mapping.
+ *
+ * @internal
+ */
+function resolveSystemScheme<Names extends string>(
+  mapping?: SystemThemeMap<Names>,
+): Names {
+  const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
+  return mapping?.[scheme] ?? (scheme as Names);
+}
+
+/**
  * Creates the React Context and provider component for a given theme configuration.
  *
  * @internal Used by {@link createThemeTransition}; not part of the public API.
@@ -70,7 +74,7 @@ function waitFrames(n: number): Promise<void> {
 export function createProviderAndContext<
   T extends Record<string, ThemeDefinition>,
 >(config: ThemeTransitionConfig<T>) {
-  const { themes, defaultTheme, duration = 350, onTransitionEnd } = config;
+  const { themes, defaultTheme, duration = 350, onTransitionEnd, systemThemeMap } = config;
 
   type Names = ThemeNames<T>;
   type Tokens = TokenNames<T>;
@@ -82,9 +86,20 @@ export function createProviderAndContext<
     initialTheme,
   }: {
     children: React.ReactNode;
-    initialTheme?: Names;
+    initialTheme?: Names | 'system';
   }) {
-    const startTheme = initialTheme ?? defaultTheme;
+    const isInitialSystem = initialTheme === 'system';
+    const startTheme = isInitialSystem
+      ? resolveSystemScheme<Names>(systemThemeMap)
+      : (initialTheme ?? defaultTheme);
+
+    if (!(startTheme in themes)) {
+      throw new Error(
+        `[react-native-theme-transition] initialTheme resolved to "${startTheme}" which does not exist in themes.${
+          isInitialSystem ? ' Provide `systemThemeMap` in the config to map OS appearance to your theme names.' : ''
+        }`,
+      );
+    }
 
     const [resolved, setResolved] = useState(() => ({
       colors: { ...themes[startTheme] } as Record<Tokens, string>,
@@ -98,8 +113,10 @@ export function createProviderAndContext<
     const mountedRef = useRef(true);
     const [isTransitioning, setIsTransitioning] = useState(false);
 
-    // Drives pointerEvents on the blocker overlay via the UI thread (useAnimatedProps),
-    // bypassing React reconciliation so blocking is active within one native frame.
+    // Tracks whether the provider is in system-following mode.
+    const systemModeRef = useRef(isInitialSystem);
+
+    // Blocks touches within one native frame, without waiting for a React re-render.
     const isBlocking = useSharedValue(false);
     const blockerProps = useAnimatedProps(() => ({
       pointerEvents: isBlocking.value ? 'auto' as const : 'none' as const,
@@ -118,12 +135,10 @@ export function createProviderAndContext<
 
     const transition = useCallback(async (name: Names, onCaptured?: () => void) => {
       try {
-        // Pending React state (e.g. disabled buttons) must commit before we capture,
-        // otherwise the screenshot contains stale UI.
+        // Pending React state must commit before capture to avoid stale screenshots.
         await waitFrames(1);
         if (!mountedRef.current) return;
 
-        // quality 0.9: reduces base64 payload ~30% vs 1.0, no visible degradation.
         const uri = await captureRef(rootRef, { format: 'png', quality: 0.9 });
         if (!mountedRef.current) return;
 
@@ -132,8 +147,7 @@ export function createProviderAndContext<
         onCaptured?.();
         setResolved({ colors: { ...themes[name] } as Record<Tokens, string>, name });
 
-        // Frame 1: React reconciles new theme to Shadow Tree.
-        // Frame 2: Native UI thread repaints. Without both, overlay fades to unpainted layout.
+        // Wait for the native UI thread to repaint the new theme beneath the overlay.
         await waitFrames(2);
         if (!mountedRef.current) return;
 
@@ -146,8 +160,6 @@ export function createProviderAndContext<
           onTransitionEnd?.(name);
         };
 
-        // Tied to the animation completion so cleanup happens in the exact frame
-        // the fade ends, avoiding drift from JS thread scheduling.
         overlayOpacity.set(withTiming(0, { duration }, (finished) => {
           'worklet';
           if (finished) scheduleOnRN(finishTransition);
@@ -167,13 +179,16 @@ export function createProviderAndContext<
       }
     }, [isBlocking, overlayOpacity]);
 
-    const setTheme = useCallback((name: Names, options?: SetThemeOptions) => {
+    const resolveScheme = useCallback((scheme: 'light' | 'dark'): Names => {
+      return systemThemeMap?.[scheme] ?? (scheme as Names);
+    }, []);
+
+    const applyTheme = useCallback((name: Names, options?: SetThemeOptions) => {
       if (name === targetRef.current) return;
       if (transitioningRef.current) return;
 
       targetRef.current = name;
 
-      // Instant switch — skip screenshot/overlay entirely.
       if (options?.animated === false) {
         setResolved({ colors: { ...themes[name] } as Record<Tokens, string>, name });
         return;
@@ -186,17 +201,55 @@ export function createProviderAndContext<
       transition(name, options?.onCaptured);
     }, [isBlocking, transition]);
 
+    const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions) => {
+      if (name === 'system') {
+        systemModeRef.current = true;
+        const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
+        applyTheme(resolveScheme(scheme), options);
+      } else {
+        systemModeRef.current = false;
+        applyTheme(name, options);
+      }
+    }, [applyTheme, resolveScheme]);
+
+    const appStateRef = useRef(AppState.currentState);
+
+    useEffect(() => {
+      const appearanceSub = Appearance.addChangeListener(({ colorScheme }) => {
+        if (!systemModeRef.current) return;
+        const scheme = (colorScheme ?? 'light') as 'light' | 'dark';
+        if (appStateRef.current === 'active') {
+          applyTheme(resolveScheme(scheme));
+        } else {
+          // Instant while backgrounded so React state matches the iOS snapshot.
+          applyTheme(resolveScheme(scheme), { animated: false });
+        }
+      });
+
+      // iOS can deliver a stale scheme during snapshot capture; re-read on foreground.
+      const appSub = AppState.addEventListener('change', (next) => {
+        if (appStateRef.current !== 'active' && next === 'active' && systemModeRef.current) {
+          const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
+          applyTheme(resolveScheme(scheme), { animated: false });
+        }
+        appStateRef.current = next;
+      });
+
+      return () => {
+        appearanceSub.remove();
+        appSub.remove();
+      };
+    }, [applyTheme, resolveScheme]);
+
     const value = useMemo(() => ({
       colors: resolved.colors, name: resolved.name, setTheme, isTransitioning,
     }), [resolved, setTheme, isTransitioning]);
 
     return (
       <Context.Provider value={value}>
-        {/* Required on Android — RN flattens view nodes by default, which breaks captureRef targeting. */}
+        {/* collapsable={false} prevents Android from flattening the view, which breaks captureRef. */}
         <View ref={rootRef} style={ROOT_STYLE} collapsable={false}>
           {children}
-          {/* pointerEvents driven by a shared value so blocking activates within one
-             native frame, without waiting for a React re-render cycle. */}
           <Animated.View style={FILL} animatedProps={blockerProps} />
           {overlayUri != null ? (
             <Animated.View style={[FILL, overlayStyle]} pointerEvents="none">

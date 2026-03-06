@@ -12,8 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `createThemeTransition` factory function with full TypeScript generic inference
 - `ThemeTransitionProvider` component with screenshot-overlay transition mechanism
 - `useTheme` hook returning `colors`, `name`, `setTheme`, and `isTransitioning`
-- `useSystemTheme` hook for automatic OS appearance following
-- `setTheme` options with `onCaptured` callback for haptic feedback integration
+- Built-in system theme support via `initialTheme="system"` and `setTheme('system')`
+- `systemThemeMap` config option for mapping OS appearance to custom theme names
+- `setTheme` options with `animated` flag and `onCaptured` callback
 - Touch-blocking layer via Reanimated shared values to prevent interaction during transitions
 - `onTransitionEnd` configuration callback
 - Configurable fade `duration` (default 350ms)

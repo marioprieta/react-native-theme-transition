@@ -18,6 +18,7 @@ export { createThemeTransition } from './createThemeTransition';
 export type {
   ThemeTransitionConfig,
   ThemeTransitionAPI,
+  SystemThemeMap,
   SetThemeOptions,
   ThemeDefinition,
   ThemeNames,
