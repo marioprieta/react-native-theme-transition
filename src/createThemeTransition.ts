@@ -1,19 +1,19 @@
 /**
- * Factory that wires the animated theme provider, context, and hooks.
+ * Factory that wires the theme transition provider, context, and hooks.
  *
  * @remarks
  * Validates theme configuration at initialization: ensures at least one theme
- * exists, that {@link AnimatedThemeConfig.defaultTheme | defaultTheme} refers
+ * exists, that {@link ThemeTransitionConfig.defaultTheme | defaultTheme} refers
  * to an actual theme, and that all themes share identical token keys.
- * Returns a self-contained API ({@link AnimatedThemeAPI}) with no singletons,
+ * Returns a self-contained API ({@link ThemeTransitionAPI}) with no singletons,
  * so multiple theme scopes can coexist in the same app.
  *
  * @module
  */
 
 import type {
-  AnimatedThemeAPI,
-  AnimatedThemeConfig,
+  ThemeTransitionAPI,
+  ThemeTransitionConfig,
   ThemeDefinition,
   ThemeNames,
 } from './types';
@@ -22,7 +22,7 @@ import { createUseTheme } from './hooks/useTheme';
 import { createUseSystemTheme } from './hooks/useSystemTheme';
 
 /**
- * Creates a fully typed animated theme system.
+ * Creates a fully typed theme transition system.
  *
  * @typeParam T - Your application's theme map, keyed by theme name.
  * @param config - Theme configuration including available themes and defaults.
@@ -30,15 +30,15 @@ import { createUseSystemTheme } from './hooks/useSystemTheme';
  *
  * @example
  * ```tsx
- * const { AnimatedThemeProvider, useTheme } = createAnimatedTheme({
+ * const { ThemeTransitionProvider, useTheme } = createThemeTransition({
  *   themes: { light: { bg: '#fff' }, dark: { bg: '#000' } },
  *   defaultTheme: 'light',
  * });
  * ```
  */
-export function createAnimatedTheme<
+export function createThemeTransition<
   T extends Record<string, ThemeDefinition>,
->(config: AnimatedThemeConfig<T>): AnimatedThemeAPI<T> {
+>(config: ThemeTransitionConfig<T>): ThemeTransitionAPI<T> {
   const themeNames = Object.keys(config.themes) as ThemeNames<T>[];
 
   if (themeNames.length === 0) {
@@ -61,10 +61,10 @@ export function createAnimatedTheme<
     }
   }
 
-  const { Context, AnimatedThemeProvider } = createProviderAndContext(config);
+  const { Context, ThemeTransitionProvider } = createProviderAndContext(config);
 
   return {
-    AnimatedThemeProvider,
+    ThemeTransitionProvider,
     useTheme: createUseTheme<T>(Context),
     useSystemTheme: createUseSystemTheme<T>(Context),
   };

@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import type { Context } from 'react';
 import type {
-  AnimatedThemeContextValue,
+  ThemeTransitionContextValue,
   SetThemeOptions,
   ThemeDefinition,
   ThemeNames,
@@ -11,10 +11,10 @@ import type {
 /**
  * Factory that produces the `useTheme` hook bound to a specific context.
  *
- * @internal Used by {@link createAnimatedTheme}; not part of the public API.
+ * @internal Used by {@link createThemeTransition}; not part of the public API.
  */
 export function createUseTheme<T extends Record<string, ThemeDefinition>>(
-  Ctx: Context<AnimatedThemeContextValue<TokenNames<T>, ThemeNames<T>> | null>,
+  Ctx: Context<ThemeTransitionContextValue<TokenNames<T>, ThemeNames<T>> | null>,
 ) {
   type Tokens = TokenNames<T>;
   type Names = ThemeNames<T>;
@@ -30,7 +30,7 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
     const ctx = useContext(Ctx);
     if (!ctx) {
       throw new Error(
-        '[react-native-theme-transition] `useTheme` must be used inside an `AnimatedThemeProvider`.',
+        '[react-native-theme-transition] `useTheme` must be used inside an `ThemeTransitionProvider`.',
       );
     }
     return ctx as ThemeValue;

@@ -6,7 +6,7 @@
 ![react compiler](https://img.shields.io/badge/React_Compiler-compatible-blue.svg)
 [![license](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/marioprieta/react-native-theme-transition/blob/main/LICENSE)
 
-Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS, 60 FPS.
+Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS, powered by Reanimated.
 
 <!-- TODO: Replace with actual demo GIF (600x1300px, 30fps, <5MB) -->
 <!-- <p align="center">
@@ -20,29 +20,30 @@ Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS
 
 Theme transitions in React Native have always needed custom native modules. That means no Expo Go, no OTA updates, and extra maintenance for each platform.
 
-This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a 60 FPS cross-fade that works everywhere, no native code needed. All peer dependencies are already included in Expo SDK 54+.
+This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a smooth cross-fade that works everywhere, no native code needed. All peer dependencies are already included in Expo SDK 54+.
 
 ## Features
 
+- **Smooth cross-fade transitions.** Screenshot-overlay technique powered by Reanimated on the native UI thread, matching your display's refresh rate (60–120 FPS).
 - **Expo Go compatible.** No native code, no prebuilds.
-- **Full theme management.** Provider, typed hooks, and deep generic inference out of the box.
-- **60 FPS animations.** The fade runs entirely on the UI thread via Reanimated.
-- **System theme sync.** Transitions automatically when the OS appearance changes.
-- **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules). Works with and without the compiler.
+- **Built-in theme management.** Provider, typed hooks, and deep generic inference out of the box.
+- **System theme sync.** Animates when the OS appearance changes; instant switch when returning from background.
 - **Transition guard.** Blocks concurrent transitions and exposes `isTransitioning`.
+- **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules). Works with and without the compiler.
 - **Tiny footprint.** ~12 kB compressed, zero runtime dependencies.
 
 ## Comparison
 
-| Feature | react-native-theme-transition | react-native-theme-switch-animation |
-|---|:---:|:---:|
-| Expo Go support | ✅ | ❌ Requires prebuild |
-| Execution | Pure JS / Reanimated + Worklets | Native modules (Java/ObjC) |
-| Theme state management | ✅ Provider + typed hooks | ❌ Bring your own |
-| TypeScript generics | ✅ Deep inference for tokens | ⚠️ Basic typings |
-| System theme listener | ✅ Built-in (`useSystemTheme`) | ❌ Not included |
-| React Compiler | ✅ Compatible | ❌ |
-| New Architecture (Fabric) | ✅ | ✅ |
+| Feature | react-native-theme-transition | react-native-theme-switch-animation | No library (manual) |
+|---|:---:|:---:|:---:|
+| Animated transition | ✅ Cross-fade | ✅ Circle/slide reveal | ❌ Instant flash |
+| Expo Go support | ✅ | ❌ Requires prebuild | ✅ |
+| Execution | Pure JS / Reanimated + Worklets | Native modules (Java/ObjC) | JS thread |
+| Theme state management | ✅ Provider + typed hooks | ❌ Bring your own | ❌ Bring your own |
+| TypeScript generics | ✅ Deep inference for tokens | ⚠️ Basic typings | ❌ Manual |
+| System theme listener | ✅ Built-in (`useSystemTheme`) | ❌ Not included | ❌ Manual |
+| React Compiler | ✅ | ❌ | Depends on code |
+| New Architecture (Fabric) | ✅ | ✅ | ✅ |
 
 ## Installation
 
@@ -56,7 +57,7 @@ yarn add react-native-theme-transition react-native-reanimated react-native-view
 
 > **Already using Expo SDK 54+?** `react-native-reanimated`, `react-native-view-shot`, and `react-native-worklets` are already included. Just install `react-native-theme-transition`.
 
-> **CLI users:** Add `react-native-reanimated/plugin` to your `babel.config.js` and run `npx pod-install` for iOS.
+> **CLI users:** Add `react-native-worklets/plugin` to your `babel.config.js` and run `npx pod-install` for iOS.
 
 ## Quick start
 
@@ -64,7 +65,7 @@ yarn add react-native-theme-transition react-native-reanimated react-native-view
 
 ```ts
 // theme.ts
-import { createAnimatedTheme } from 'react-native-theme-transition';
+import { createThemeTransition } from 'react-native-theme-transition';
 
 const light = {
   background: '#ffffff',
@@ -80,8 +81,8 @@ const dark = {
   primary:    '#0A84FF',
 };
 
-export const { AnimatedThemeProvider, useTheme, useSystemTheme } =
-  createAnimatedTheme({
+export const { ThemeTransitionProvider, useTheme, useSystemTheme } =
+  createThemeTransition({
     themes: { light, dark },
     defaultTheme: 'light',
   });
@@ -94,13 +95,13 @@ export const { AnimatedThemeProvider, useTheme, useSystemTheme } =
 ### 2. Wrap your app
 
 ```tsx
-import { AnimatedThemeProvider } from './theme';
+import { ThemeTransitionProvider } from './theme';
 
 export default function App() {
   return (
-    <AnimatedThemeProvider>
+    <ThemeTransitionProvider>
       <MyApp />
-    </AnimatedThemeProvider>
+    </ThemeTransitionProvider>
   );
 }
 ```
@@ -129,17 +130,17 @@ function MyScreen() {
 
 ## API reference
 
-### `createAnimatedTheme(config)`
+### `createThemeTransition(config)`
 
 Creates a Provider and hooks from your theme definitions. Validates that all themes share the same token keys at initialization, so mismatches are caught immediately during development.
 
 ```ts
-const { AnimatedThemeProvider, useTheme, useSystemTheme } =
-  createAnimatedTheme({
+const { ThemeTransitionProvider, useTheme, useSystemTheme } =
+  createThemeTransition({
     themes: { light, dark },
     defaultTheme: 'light',
     duration: 350,
-    onTransitionEnd: (name) => console.log(`Switched to ${name}`),
+    onTransitionEnd: (name) => analytics.track('theme_switch', { theme: name }),
   });
 ```
 
@@ -150,7 +151,7 @@ const { AnimatedThemeProvider, useTheme, useSystemTheme } =
 | `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. |
 | `defaultTheme` | `keyof themes` | *required* | Theme used on first render. |
 | `duration` | `number` | `350` | Fade-out animation duration in milliseconds. |
-| `onTransitionEnd` | `(name: string) => void` | | Called after the fade animation completes. |
+| `onTransitionEnd` | `(name: string) => void` | | Called after the fade completes and the overlay is removed. Use it to persist the selected theme to storage or log analytics. |
 
 #### Type inference
 
@@ -160,7 +161,7 @@ You never need to pass generic types manually. TypeScript infers theme names and
 const light = { background: '#fff', text: '#000', primary: '#007AFF' };
 const dark  = { background: '#000', text: '#fff', primary: '#0A84FF' };
 
-const { useTheme } = createAnimatedTheme({
+const { useTheme } = createThemeTransition({
   themes: { light, dark },
   defaultTheme: 'light',
 });
@@ -177,20 +178,20 @@ setTheme('ocean') // ❌ TypeScript error: Argument not assignable
 
 ---
 
-### `AnimatedThemeProvider`
+### `ThemeTransitionProvider`
 
 Wraps your app tree and provides the theme context.
 
 ```tsx
-<AnimatedThemeProvider initialTheme="dark">
+<ThemeTransitionProvider initialTheme="dark">
   <App />
-</AnimatedThemeProvider>
+</ThemeTransitionProvider>
 ```
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `children` | `ReactNode` | *required* | Your application tree. |
-| `initialTheme` | `ThemeName` | Value of `defaultTheme` | Override the starting theme. Useful for restoring a persisted preference on app launch. |
+| `initialTheme` | `ThemeName` | Value of `defaultTheme` | Overrides `defaultTheme` for this provider instance. Use when the starting theme depends on runtime data — for example, a persisted user preference loaded from storage, or the current system appearance. Renders on the first frame before effects run, preventing a flash of the wrong theme. |
 
 ---
 
@@ -218,7 +219,7 @@ const { colors, name, setTheme, isTransitioning } = useTheme();
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `animated` | `boolean` | `true` | When `false`, switches the theme instantly without screenshot or fade. Useful for background system theme changes. |
+| `animated` | `boolean` | `true` | When `false`, switches instantly without animation. Useful for restoring a persisted theme at startup or syncing from an external store. |
 | `onCaptured` | `() => void` | | Called after the screenshot is captured, just before the theme switch is applied. Only called when `animated` is `true`. |
 
 ```ts
@@ -234,7 +235,7 @@ setTheme('dark', {
 
 ### `useSystemTheme(enabled?, mapping?)`
 
-Subscribes to OS appearance changes and triggers theme transitions automatically. Animates when the app is in the foreground (e.g. Control Center toggle) and switches instantly when the app returns from the background, matching native platform behavior.
+Subscribes to OS appearance changes and triggers theme transitions automatically. On mount, performs an instant (non-animated) sync with the current system appearance. Animates when the app is in the foreground (e.g. Control Center toggle) and switches instantly when the app returns from the background, matching native platform behavior.
 
 ```ts
 // Follow system theme (assumes your themes are named 'light' and 'dark')
@@ -252,7 +253,7 @@ useSystemTheme(true, { light: 'sunrise', dark: 'midnight' });
 | `enabled` | `boolean` | `true` | When `true` or omitted, subscribes to `Appearance` changes. Pass `false` explicitly to deactivate the listener. |
 | `mapping` | `{ light?: ThemeName, dark?: ThemeName }` | | Maps OS color schemes to your theme names. If omitted, assumes your themes are named `'light'` and `'dark'`. |
 
-> Must be called inside `AnimatedThemeProvider`. Calls `setTheme` internally with animated transitions in the foreground and instant switches when returning from background.
+> Must be called inside `ThemeTransitionProvider`. Calls `setTheme` internally with animated transitions in the foreground and instant switches when returning from background.
 
 ### Exported types
 
@@ -260,12 +261,12 @@ For advanced TypeScript usage, these types are available as named imports:
 
 ```ts
 import type {
-  ThemeDefinition,       // Record<string, string> — shape of a single theme
-  AnimatedThemeConfig,   // Config object for createAnimatedTheme
-  AnimatedThemeAPI,      // Return type of createAnimatedTheme
-  SetThemeOptions,       // Options for setTheme ({ animated, onCaptured })
-  ThemeNames,            // Union of theme name strings
-  TokenNames,            // Union of color token strings
+  ThemeDefinition,         // Record<string, string> — shape of a single theme
+  ThemeTransitionConfig,   // Config object for createThemeTransition
+  ThemeTransitionAPI,      // Return type of createThemeTransition
+  SetThemeOptions,         // Options for setTheme ({ animated, onCaptured })
+  ThemeNames,              // Union of theme name strings
+  TokenNames,              // Union of color token strings
 } from 'react-native-theme-transition';
 ```
 
@@ -275,11 +276,11 @@ import type {
 
 ### Start with the system theme
 
-`useSystemTheme` listens for **changes** but doesn't set the initial theme. Pass `initialTheme` to match the system on launch so there's no transition flash:
+`useSystemTheme` syncs with the current system appearance on mount (instant, no animation). Pass `initialTheme` to match the system on the very first frame, preventing a brief flash before the effect runs:
 
 ```tsx
 import { Appearance } from 'react-native';
-import { AnimatedThemeProvider, useSystemTheme } from './theme';
+import { ThemeTransitionProvider, useSystemTheme } from './theme';
 
 function SystemThemeListener() {
   useSystemTheme(true);
@@ -288,10 +289,10 @@ function SystemThemeListener() {
 
 export default function App() {
   return (
-    <AnimatedThemeProvider initialTheme={Appearance.getColorScheme() ?? 'light'}>
+    <ThemeTransitionProvider initialTheme={Appearance.getColorScheme() ?? 'light'}>
       <SystemThemeListener />
       <MyApp />
-    </AnimatedThemeProvider>
+    </ThemeTransitionProvider>
   );
 }
 ```
@@ -353,38 +354,9 @@ function App() {
 
 ## How it works
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Hook as setTheme()
-    participant Shot as ViewShot
-    participant React as React Tree
-    participant UI as UI Thread
+The library captures a full-screen screenshot of the current UI, displays it as an opaque overlay, switches all color tokens underneath, then fades the overlay out on the native UI thread via Reanimated. The screenshot is taken **before** the color switch, so the transition is seamless — no partial states, no flashes.
 
-    User->>Hook: setTheme('dark')
-    Hook->>UI: Block touches (shared value → pointerEvents)
-    Hook->>Shot: Wait 1 frame, capture screen
-    Shot-->>Hook: Return image URI
-    Hook->>UI: Mount opaque overlay (screenshot)
-    Hook->>React: Update color tokens
-    React-->>React: Re-render with new theme (~2 frames)
-    Hook->>UI: Fade overlay out (350ms via Reanimated)
-    UI-->>Hook: Animation complete (worklet callback)
-    Hook->>UI: Unblock touches, remove overlay
-    UI-->>User: Smooth cross-fade complete
-```
-
-1. `setTheme('dark')` is called
-2. Touches blocked instantly via a Reanimated shared value (no React re-render needed)
-3. One frame wait for pending renders to commit
-4. Full-screen screenshot captured via `react-native-view-shot`
-5. Screenshot displayed as an opaque overlay
-6. Color tokens switched instantly underneath
-7. Two more frames for React to re-render with new colors
-8. Overlay fades out on the UI thread via `react-native-reanimated`
-9. Touches unblocked and overlay removed once the fade completes via a worklet callback (`react-native-worklets`)
-
-The screenshot is captured **before** the color switch, so the overlay looks identical to the current screen. When it fades, it reveals the fully re-rendered new theme. No partial states, no flashes.
+For the full step-by-step breakdown and sequence diagram, see [docs/how-it-works.md](docs/how-it-works.md).
 
 ## Trade-offs
 

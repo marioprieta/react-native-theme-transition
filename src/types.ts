@@ -25,11 +25,11 @@ export type TokenNames<T extends Record<string, ThemeDefinition>> =
   keyof T[ThemeNames<T>] & string;
 
 /**
- * Configuration for {@link createAnimatedTheme}.
+ * Configuration for {@link createThemeTransition}.
  *
  * @typeParam T - Your application's theme map, keyed by theme name.
  */
-export interface AnimatedThemeConfig<T extends Record<string, ThemeDefinition>> {
+export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>> {
   /**
    * All available themes keyed by name.
    *
@@ -57,7 +57,7 @@ export interface AnimatedThemeConfig<T extends Record<string, ThemeDefinition>> 
 }
 
 /**
- * Options for {@link AnimatedThemeAPI.useTheme | setTheme}.
+ * Options for {@link ThemeTransitionAPI.useTheme | setTheme}.
  */
 export interface SetThemeOptions {
   /**
@@ -88,7 +88,7 @@ export interface SetThemeOptions {
  *
  * @internal
  */
-export interface AnimatedThemeContextValue<
+export interface ThemeTransitionContextValue<
   Tokens extends string,
   Names extends string,
 > {
@@ -103,7 +103,7 @@ export interface AnimatedThemeContextValue<
 }
 
 /**
- * Public API returned by {@link createAnimatedTheme}.
+ * Public API returned by {@link createThemeTransition}.
  *
  * @remarks
  * This interface is the primary documentation surface for consumers.
@@ -112,7 +112,7 @@ export interface AnimatedThemeContextValue<
  *
  * @typeParam T - Your application's theme map, keyed by theme name.
  */
-export interface AnimatedThemeAPI<T extends Record<string, ThemeDefinition>> {
+export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
   /**
    * Provider that supplies animated theme colors via context.
    *
@@ -120,9 +120,9 @@ export interface AnimatedThemeAPI<T extends Record<string, ThemeDefinition>> {
    * Place this as high as possible in the component tree (ideally wrapping
    * navigation) so the screenshot can capture the entire screen.
    */
-  AnimatedThemeProvider: React.FC<{
+  ThemeTransitionProvider: React.FC<{
     children: React.ReactNode;
-    /** Optional initial theme; defaults to {@link AnimatedThemeConfig.defaultTheme}. */
+    /** Optional initial theme; defaults to {@link ThemeTransitionConfig.defaultTheme}. */
     initialTheme?: ThemeNames<T>;
   }>;
 
@@ -131,7 +131,7 @@ export interface AnimatedThemeAPI<T extends Record<string, ThemeDefinition>> {
    *
    * @returns An object with `colors`, `name`, `setTheme`, and `isTransitioning`.
    *
-   * @throws If called outside an `AnimatedThemeProvider`.
+   * @throws If called outside an `ThemeTransitionProvider`.
    */
   useTheme: () => {
     /** Resolved color values for every token in the active theme. */
@@ -157,7 +157,7 @@ export interface AnimatedThemeAPI<T extends Record<string, ThemeDefinition>> {
    * @param mapping - Maps system appearance to theme names. Falls back to
    *   using the appearance value (`'light'`/`'dark'`) as the theme name.
    *
-   * @throws If called outside an `AnimatedThemeProvider`.
+   * @throws If called outside an `ThemeTransitionProvider`.
    */
   useSystemTheme: (
     enabled?: boolean,

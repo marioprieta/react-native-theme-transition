@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef } from 'react';
 import { Appearance, AppState } from 'react-native';
 import type { Context } from 'react';
 import type {
-  AnimatedThemeContextValue,
+  ThemeTransitionContextValue,
   ThemeDefinition,
   ThemeNames,
   TokenNames,
@@ -11,12 +11,12 @@ import type {
 /**
  * Factory that produces the `useSystemTheme` hook bound to a specific context.
  *
- * @internal Used by {@link createAnimatedTheme}; not part of the public API.
+ * @internal Used by {@link createThemeTransition}; not part of the public API.
  */
 export function createUseSystemTheme<
   T extends Record<string, ThemeDefinition>,
 >(
-  Ctx: Context<AnimatedThemeContextValue<TokenNames<T>, ThemeNames<T>> | null>,
+  Ctx: Context<ThemeTransitionContextValue<TokenNames<T>, ThemeNames<T>> | null>,
 ) {
   type Names = ThemeNames<T>;
 
@@ -27,7 +27,7 @@ export function createUseSystemTheme<
     const ctx = useContext(Ctx);
     if (!ctx) {
       throw new Error(
-        '[react-native-theme-transition] `useSystemTheme` must be used inside an `AnimatedThemeProvider`.',
+        '[react-native-theme-transition] `useSystemTheme` must be used inside an `ThemeTransitionProvider`.',
       );
     }
 

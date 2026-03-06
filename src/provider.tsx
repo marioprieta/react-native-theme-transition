@@ -24,8 +24,8 @@ import Animated, {
 import { captureRef } from 'react-native-view-shot';
 import { scheduleOnRN } from 'react-native-worklets';
 import type {
-  AnimatedThemeConfig,
-  AnimatedThemeContextValue,
+  ThemeTransitionConfig,
+  ThemeTransitionContextValue,
   SetThemeOptions,
   ThemeDefinition,
   ThemeNames,
@@ -65,19 +65,19 @@ function waitFrames(n: number): Promise<void> {
 /**
  * Creates the React Context and provider component for a given theme configuration.
  *
- * @internal Used by {@link createAnimatedTheme}; not part of the public API.
+ * @internal Used by {@link createThemeTransition}; not part of the public API.
  */
 export function createProviderAndContext<
   T extends Record<string, ThemeDefinition>,
->(config: AnimatedThemeConfig<T>) {
+>(config: ThemeTransitionConfig<T>) {
   const { themes, defaultTheme, duration = 350, onTransitionEnd } = config;
 
   type Names = ThemeNames<T>;
   type Tokens = TokenNames<T>;
 
-  const Context = createContext<AnimatedThemeContextValue<Tokens, Names> | null>(null);
+  const Context = createContext<ThemeTransitionContextValue<Tokens, Names> | null>(null);
 
-  function AnimatedThemeProvider({
+  function ThemeTransitionProvider({
     children,
     initialTheme,
   }: {
@@ -208,5 +208,5 @@ export function createProviderAndContext<
     );
   }
 
-  return { Context, AnimatedThemeProvider };
+  return { Context, ThemeTransitionProvider };
 }

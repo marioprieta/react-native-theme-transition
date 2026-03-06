@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `createAnimatedTheme` factory function with full TypeScript generic inference
-- `AnimatedThemeProvider` component with screenshot-overlay transition mechanism
+- `createThemeTransition` factory function with full TypeScript generic inference
+- `ThemeTransitionProvider` component with screenshot-overlay transition mechanism
 - `useTheme` hook returning `colors`, `name`, `setTheme`, and `isTransitioning`
 - `useSystemTheme` hook for automatic OS appearance following
 - `setTheme` options with `onCaptured` callback for haptic feedback integration
