@@ -6,7 +6,7 @@
 ![react compiler](https://img.shields.io/badge/React_Compiler-compatible-blue.svg)
 [![license](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/marioprieta/react-native-theme-transition/blob/main/LICENSE)
 
-**All-in-one, Expo-first theme solution.** Smooth, animated theme and dark mode transitions for React Native. Expo Go compatible, 100% JS, 60 FPS, powered by Reanimated.
+Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS, 60 FPS.
 
 <!-- TODO: Replace with actual demo GIF (600x1300px, 30fps, <5MB) -->
 <!-- <p align="center">
@@ -18,21 +18,31 @@
 
 ## Motivation
 
-Implementing smooth, app-wide theme transitions in React Native has historically required custom native iOS and Android modules. This approach alienates Expo Go users, breaks Over-The-Air (OTA) update pipelines, and adds significant maintenance overhead.
+Theme transitions in React Native have always needed custom native modules. That means no Expo Go, no OTA updates, and extra maintenance for each platform.
 
-`react-native-theme-transition` solves this entirely in the JavaScript and UI thread layers. It captures a screenshot of the current UI, overlays it, switches all colors underneath, then fades out the overlay — achieving flawless 60 FPS cross-fades without ever touching native bridges or requiring custom development clients.
-
-All peer dependencies (`react-native-reanimated`, `react-native-view-shot`, `react-native-worklets`) are already included in Expo SDK 55+.
+This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a 60 FPS cross-fade that works everywhere, no native code needed. All peer dependencies are already included in Expo SDK 54+.
 
 ## Features
 
-- **Expo Go compatible** — zero native code or prebuilds required
-- **Full theme management** — Provider, typed hooks, and deep generic inference
-- **60 FPS animations** — fade runs entirely on the UI thread via Reanimated
-- **System theme sync** — automatically transitions when OS appearance changes
-- **React Compiler ready** — all hooks follow the [Rules of React](https://react.dev/reference/rules); no manual `useMemo` or `useCallback` needed. Works with and without the compiler enabled
-- **Transition guard** — blocks concurrent transitions, exposes `isTransitioning`
-- **Tiny footprint** — ~12 kB compressed, zero runtime dependencies
+- **Expo Go compatible.** No native code, no prebuilds.
+- **Full theme management.** Provider, typed hooks, and deep generic inference out of the box.
+- **60 FPS animations.** The fade runs entirely on the UI thread via Reanimated.
+- **System theme sync.** Transitions automatically when the OS appearance changes.
+- **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules). Works with and without the compiler.
+- **Transition guard.** Blocks concurrent transitions and exposes `isTransitioning`.
+- **Tiny footprint.** ~12 kB compressed, zero runtime dependencies.
+
+## Comparison
+
+| Feature | react-native-theme-transition | react-native-theme-switch-animation |
+|---|:---:|:---:|
+| Expo Go support | ✅ | ❌ Requires prebuild |
+| Execution | Pure JS / Reanimated + Worklets | Native modules (Java/ObjC) |
+| Theme state management | ✅ Provider + typed hooks | ❌ Bring your own |
+| TypeScript generics | ✅ Deep inference for tokens | ⚠️ Basic typings |
+| System theme listener | ✅ Built-in (`useSystemTheme`) | ❌ Not included |
+| React Compiler | ✅ Compatible | ❌ |
+| New Architecture (Fabric) | ✅ | ✅ |
 
 ## Installation
 
@@ -44,7 +54,7 @@ npx expo install react-native-theme-transition react-native-reanimated react-nat
 yarn add react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
 ```
 
-> **Already using Expo SDK 55+?** `react-native-reanimated`, `react-native-view-shot`, and `react-native-worklets` are already included — just install `react-native-theme-transition`.
+> **Already using Expo SDK 54+?** `react-native-reanimated`, `react-native-view-shot`, and `react-native-worklets` are already included. Just install `react-native-theme-transition`.
 
 > **CLI users:** Add `react-native-reanimated/plugin` to your `babel.config.js` and run `npx pod-install` for iOS.
 
@@ -121,7 +131,7 @@ function MyScreen() {
 
 ### `createAnimatedTheme(config)`
 
-Factory function that validates your theme definitions and returns a Provider and hooks with full type inference.
+Creates a Provider and hooks from your theme definitions. Validates that all themes share the same token keys at initialization, so mismatches are caught immediately during development.
 
 ```ts
 const { AnimatedThemeProvider, useTheme, useSystemTheme } =
@@ -140,9 +150,7 @@ const { AnimatedThemeProvider, useTheme, useSystemTheme } =
 | `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. |
 | `defaultTheme` | `keyof themes` | *required* | Theme used on first render. |
 | `duration` | `number` | `350` | Fade-out animation duration in milliseconds. |
-| `onTransitionEnd` | `(name: string) => void` | — | Called after the fade animation completes. |
-
-> **Theme validation:** At initialization, `createAnimatedTheme` checks that every theme has the exact same keys as `defaultTheme`. If any keys are missing or extra, it throws immediately — catching mismatches during development, not in production.
+| `onTransitionEnd` | `(name: string) => void` | | Called after the fade animation completes. |
 
 #### Type inference
 
@@ -182,7 +190,7 @@ Wraps your app tree and provides the theme context.
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `children` | `ReactNode` | *required* | Your application tree. |
-| `initialTheme` | `ThemeName` | Value of `defaultTheme` | Override the starting theme. Useful for restoring a persisted user preference on app launch. |
+| `initialTheme` | `ThemeName` | Value of `defaultTheme` | Override the starting theme. Useful for restoring a persisted preference on app launch. |
 
 ---
 
@@ -211,7 +219,7 @@ const { colors, name, setTheme, isTransitioning } = useTheme();
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `animated` | `boolean` | `true` | When `false`, switches the theme instantly without screenshot or fade. Useful for background system theme changes. |
-| `onCaptured` | `() => void` | — | Called after the screenshot is captured, just before the theme switch is applied. Only called when `animated` is `true`. |
+| `onCaptured` | `() => void` | | Called after the screenshot is captured, just before the theme switch is applied. Only called when `animated` is `true`. |
 
 ```ts
 setTheme('dark', {
@@ -226,7 +234,7 @@ setTheme('dark', {
 
 ### `useSystemTheme(enabled?, mapping?)`
 
-Subscribes to OS appearance changes and triggers theme transitions automatically. Animates when the app is in the foreground (e.g. Control Center toggle); switches instantly when the app returns from the background, matching native platform behavior.
+Subscribes to OS appearance changes and triggers theme transitions automatically. Animates when the app is in the foreground (e.g. Control Center toggle) and switches instantly when the app returns from the background, matching native platform behavior.
 
 ```ts
 // Follow system theme (assumes your themes are named 'light' and 'dark')
@@ -242,9 +250,9 @@ useSystemTheme(true, { light: 'sunrise', dark: 'midnight' });
 | Param | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | When `true` or omitted, subscribes to `Appearance` changes. Pass `false` explicitly to deactivate the listener. |
-| `mapping` | `{ light?: ThemeName, dark?: ThemeName }` | — | Maps OS color schemes to your theme names. If omitted, assumes your themes are named `'light'` and `'dark'`. |
+| `mapping` | `{ light?: ThemeName, dark?: ThemeName }` | | Maps OS color schemes to your theme names. If omitted, assumes your themes are named `'light'` and `'dark'`. |
 
-> Must be called inside `AnimatedThemeProvider`. Calls `setTheme` internally — animated when the app is visible, instant when returning from background.
+> Must be called inside `AnimatedThemeProvider`. Calls `setTheme` internally with animated transitions in the foreground and instant switches when returning from background.
 
 ### Exported types
 
@@ -255,7 +263,7 @@ import type {
   ThemeDefinition,       // Record<string, string> — shape of a single theme
   AnimatedThemeConfig,   // Config object for createAnimatedTheme
   AnimatedThemeAPI,      // Return type of createAnimatedTheme
-  SetThemeOptions,       // Options for setTheme ({ onCaptured })
+  SetThemeOptions,       // Options for setTheme ({ animated, onCaptured })
   ThemeNames,            // Union of theme name strings
   TokenNames,            // Union of color token strings
 } from 'react-native-theme-transition';
@@ -267,7 +275,7 @@ import type {
 
 ### Start with the system theme
 
-`useSystemTheme` listens for **changes** but doesn't set the initial theme. Pass `initialTheme` to match the system on launch — no transition flash:
+`useSystemTheme` listens for **changes** but doesn't set the initial theme. Pass `initialTheme` to match the system on launch so there's no transition flash:
 
 ```tsx
 import { Appearance } from 'react-native';
@@ -343,18 +351,6 @@ function App() {
 }
 ```
 
-## Comparison
-
-| Feature | react-native-theme-transition | react-native-theme-switch-animation |
-|---|:---:|:---:|
-| Expo Go support | ✅ | ❌ Requires prebuild |
-| Execution | Pure JS / Reanimated + Worklets | Native modules (Java/ObjC) |
-| Theme state management | ✅ Provider + typed hooks | ❌ Bring your own |
-| TypeScript generics | ✅ Deep inference for tokens | ⚠️ Basic typings |
-| System theme listener | ✅ Built-in (`useSystemTheme`) | ❌ Not included |
-| React Compiler | ✅ Compatible | ❌ |
-| New Architecture (Fabric) | ✅ | ✅ |
-
 ## How it works
 
 ```mermaid
@@ -379,29 +375,29 @@ sequenceDiagram
 ```
 
 1. `setTheme('dark')` is called
-2. Blocks all touches instantly via a Reanimated shared value driving `pointerEvents` on an invisible overlay — active within one native frame, no React re-render needed
-3. Waits one frame for pending renders to commit
-4. Captures a full-screen screenshot via `react-native-view-shot`
-5. Shows the screenshot as an opaque overlay
-6. Switches all color tokens instantly underneath
-7. Waits two frames for React to re-render with new colors
-8. Fades the overlay out (default 350ms) on the UI thread via `react-native-reanimated`
-9. Unblocks touches and removes the overlay once the fade animation completes via a worklet callback (`react-native-worklets`)
+2. Touches blocked instantly via a Reanimated shared value (no React re-render needed)
+3. One frame wait for pending renders to commit
+4. Full-screen screenshot captured via `react-native-view-shot`
+5. Screenshot displayed as an opaque overlay
+6. Color tokens switched instantly underneath
+7. Two more frames for React to re-render with new colors
+8. Overlay fades out on the UI thread via `react-native-reanimated`
+9. Touches unblocked and overlay removed once the fade completes via a worklet callback (`react-native-worklets`)
 
-The screenshot is captured **before** the color switch, so the overlay is visually identical to the current screen. When it fades, it reveals the fully re-rendered new theme — no partial states, no flashes.
+The screenshot is captured **before** the color switch, so the overlay looks identical to the current screen. When it fades, it reveals the fully re-rendered new theme. No partial states, no flashes.
 
-## Known limitations
+## Trade-offs
 
-- **Touch blocking during transitions** — During the fade animation (default 350ms), an invisible overlay blocks all touch and scroll events. This is an intentional architectural decision: since the user sees a static screenshot overlay, allowing scroll would cause the underlying UI to move invisibly, creating visual dissonance when the overlay fades. This brief interruption mirrors standard iOS and Android OS-level transition behavior and is imperceptible in normal usage.
+- **No interaction during transitions.** Touches, scrolls, and additional `setTheme` calls are blocked while the fade is running. Use `isTransitioning` to disable buttons or show loading states.
 
-- **Sequential transitions only** — If `setTheme` is called during an ongoing transition, the call is silently ignored. Use `isTransitioning` to disable toggle buttons during this window.
+- **Static overlay.** The transition uses a screenshot, so dynamic content (videos, animations, live counters) will appear frozen for the duration of the fade.
 
 ## Requirements
 
 - React Native >= 0.76
 - react-native-reanimated >= 4.0.0
 - react-native-view-shot >= 3.0.0
-- react-native-worklets >= 0.1.0
+- react-native-worklets >= 0.5.0
 
 ## Contributing
 
