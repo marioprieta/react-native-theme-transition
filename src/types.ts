@@ -72,7 +72,8 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    * Called when an animated transition begins, before the screenshot capture.
    *
    * @remarks
-   * Only fires for animated transitions (not instant or system-driven switches).
+   * Fires for all animated transitions, including system-driven ones.
+   * Does not fire for instant switches (`animated: false`).
    *
    * @param themeName - The target theme name.
    */
@@ -82,7 +83,8 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    * Called after an animated transition completes and the overlay is removed.
    *
    * @remarks
-   * Only fires for animated transitions (not instant or system-driven switches).
+   * Fires for all animated transitions, including system-driven ones.
+   * Does not fire for instant switches (`animated: false`).
    *
    * @param themeName - The newly active theme name.
    */

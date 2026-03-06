@@ -131,13 +131,14 @@ function MyScreen() {
 
 ### `createThemeTransition(config)`
 
-Creates a Provider and hooks from your theme definitions. Validates that all themes share the same token keys at initialization, so mismatches are caught immediately during development.
+Creates a Provider and hook from your theme definitions. Validates that all themes share the same token keys and that `systemThemeMap` values reference existing themes, so mismatches are caught immediately during development.
 
 ```ts
 const { ThemeTransitionProvider, useTheme } =
   createThemeTransition({
     themes: { light, dark },
     duration: 350,
+    onTransitionStart: (name) => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
     onThemeChange: (name) => analytics.track('theme_switch', { theme: name }),
   });
 ```
@@ -149,9 +150,22 @@ const { ThemeTransitionProvider, useTheme } =
 | `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. The name `'system'` is reserved. |
 | `duration` | `number` | `350` | Fade-out animation duration in milliseconds. |
 | `systemThemeMap` | `{ light: ThemeName, dark: ThemeName }` | | Maps OS appearance to theme names. Required when your themes are not named `'light'` and `'dark'` and you want to use system mode. Both keys must be provided. |
-| `onTransitionStart` | `(name: ThemeName) => void` | | Called when an animated transition begins, before the screenshot capture. |
-| `onTransitionEnd` | `(name: ThemeName) => void` | | Called after an animated transition completes and the overlay is removed. |
+| `onTransitionStart` | `(name: ThemeName) => void` | | Called when an animated transition begins, before the screenshot capture. Fires for all animated transitions, including system-driven ones. |
+| `onTransitionEnd` | `(name: ThemeName) => void` | | Called after an animated transition completes and the overlay is removed. Fires for all animated transitions, including system-driven ones. |
 | `onThemeChange` | `(name: ThemeName) => void` | | Called whenever the active theme changes — animated, instant, or system-driven. For animated transitions, fires after `onTransitionEnd`. |
+
+#### Callback ordering
+
+For animated transitions, callbacks fire in this order:
+
+1. Config `onTransitionStart`
+2. Per-call `onTransitionStart`
+3. *(screenshot → color switch → fade animation)*
+4. Config `onTransitionEnd`
+5. Per-call `onTransitionEnd`
+6. Config `onThemeChange`
+
+For instant switches (`animated: false`), only `onThemeChange` fires. If the screenshot capture fails, the theme is applied instantly and only `onThemeChange` fires.
 
 #### Type inference
 
@@ -221,8 +235,8 @@ const { colors, name, setTheme, isTransitioning } = useTheme();
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `animated` | `boolean` | `true` | When `false`, switches instantly without animation. |
-| `onTransitionStart` | `(name: ThemeName) => void` | | Called when the animated transition begins, before the screenshot capture. Only fires when `animated` is `true` (the default). Fires after the config-level `onTransitionStart`. |
-| `onTransitionEnd` | `(name: ThemeName) => void` | | Called after the animated transition completes and the overlay is removed. Only fires when `animated` is `true` (the default). Fires after the config-level `onTransitionEnd`. |
+| `onTransitionStart` | `(name: ThemeName) => void` | | Called when the animated transition begins. Fires after the config-level `onTransitionStart`. |
+| `onTransitionEnd` | `(name: ThemeName) => void` | | Called after the animated transition completes. Fires after the config-level `onTransitionEnd`. |
 
 ```ts
 setTheme('dark', {
@@ -308,9 +322,18 @@ function ThemeSettings() {
 
 ### Haptic feedback on theme switch
 
-```tsx
-import * as Haptics from 'expo-haptics';
+For haptics on **every** animated transition (including system-driven), use the config callback:
 
+```ts
+createThemeTransition({
+  themes: { light, dark },
+  onTransitionStart: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+});
+```
+
+For haptics on a **specific** button only, use the per-call option:
+
+```ts
 setTheme('dark', {
   onTransitionStart: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
 });
