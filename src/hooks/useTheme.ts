@@ -8,7 +8,11 @@ import type {
   TokenNames,
 } from '../types';
 
-/** @internal Used by createAnimatedTheme. */
+/**
+ * Factory that produces the `useTheme` hook bound to a specific context.
+ *
+ * @internal Used by {@link createAnimatedTheme}; not part of the public API.
+ */
 export function createUseTheme<T extends Record<string, ThemeDefinition>>(
   Ctx: Context<AnimatedThemeContextValue<TokenNames<T>, ThemeNames<T>> | null>,
 ) {
@@ -26,7 +30,7 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
     const ctx = useContext(Ctx);
     if (!ctx) {
       throw new Error(
-        '[react-native-animated-theme] useTheme must be used within AnimatedThemeProvider',
+        '[react-native-theme-transition] useTheme must be used within AnimatedThemeProvider',
       );
     }
     return ctx as ThemeValue;

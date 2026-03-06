@@ -8,7 +8,11 @@ import type {
   TokenNames,
 } from '../types';
 
-/** @internal */
+/**
+ * Factory that produces the `useSystemTheme` hook bound to a specific context.
+ *
+ * @internal Used by {@link createAnimatedTheme}; not part of the public API.
+ */
 export function createUseSystemTheme<
   T extends Record<string, ThemeDefinition>,
 >(
@@ -28,6 +32,8 @@ export function createUseSystemTheme<
     }
 
     const setTheme = ctx.setTheme;
+    // Ref avoids re-subscribing when consumers pass inline objects (which fail
+    // referential equality in dependency arrays, causing infinite re-renders).
     const mappingRef = useRef(mapping);
     mappingRef.current = mapping;
 
