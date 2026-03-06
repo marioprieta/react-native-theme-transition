@@ -49,24 +49,25 @@ export function createUseSystemTheme<
       const initialScheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
       setTheme(resolveTheme(initialScheme), { animated: false });
 
-      // Ignore appearance events fired while backgrounded (iOS fires with
-      // incorrect values during its snapshot capture). When the app returns
-      // to foreground, read the real scheme and apply instantly — no animation,
-      // matching native platform behavior.
+      const appearanceSub = Appearance.addChangeListener(({ colorScheme }) => {
+        const scheme = (colorScheme ?? 'light') as 'light' | 'dark';
+        if (appStateRef.current === 'active') {
+          setTheme(resolveTheme(scheme));
+        } else {
+          // Apply instantly while backgrounded so React state matches the iOS
+          // snapshot. Without this, returning to the app shows a stale theme.
+          setTheme(resolveTheme(scheme), { animated: false });
+        }
+      });
+
+      // Safety net: if a background Appearance event delivered an incorrect
+      // scheme (iOS snapshot capture bug), correct it on foreground return.
       const appSub = AppState.addEventListener('change', (next) => {
         if (appStateRef.current !== 'active' && next === 'active') {
           const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
           setTheme(resolveTheme(scheme), { animated: false });
         }
         appStateRef.current = next;
-      });
-
-      // Animate only when the change happens while the app is in the foreground
-      // (e.g. Control Center toggle, split-screen).
-      const appearanceSub = Appearance.addChangeListener(({ colorScheme }) => {
-        if (appStateRef.current !== 'active') return;
-        const scheme = (colorScheme ?? 'light') as 'light' | 'dark';
-        setTheme(resolveTheme(scheme));
       });
 
       return () => {
