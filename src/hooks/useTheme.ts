@@ -22,7 +22,7 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
   type ThemeValue = {
     colors: { [K in Tokens]: string };
     name: Names;
-    setTheme: (name: Names | 'system', options?: SetThemeOptions) => void;
+    setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => void;
     isTransitioning: boolean;
   };
 

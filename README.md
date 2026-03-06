@@ -27,7 +27,7 @@ This library takes a different approach: capture a screenshot, overlay it, switc
 - **Smooth cross-fade transitions.** Screenshot-overlay technique powered by Reanimated on the native UI thread, matching your display's refresh rate (60–120 FPS).
 - **Expo Go compatible.** No native code, no prebuilds.
 - **Built-in theme management.** Provider, typed hooks, and deep generic inference out of the box.
-- **System theme sync.** `initialTheme="system"` and `setTheme('system')` for zero-flash OS appearance tracking at startup and runtime.
+- **System theme sync.** Follows OS appearance automatically with zero-flash startup and runtime switching.
 - **Transition guard.** Blocks concurrent transitions and exposes `isTransitioning`.
 - **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules). Works with and without the compiler.
 - **Tiny footprint.** ~12 kB compressed, zero runtime dependencies.
@@ -84,7 +84,6 @@ const dark = {
 export const { ThemeTransitionProvider, useTheme } =
   createThemeTransition({
     themes: { light, dark },
-    defaultTheme: 'light',
   });
 
 // TypeScript infers everything:
@@ -99,7 +98,7 @@ import { ThemeTransitionProvider } from './theme';
 
 export default function App() {
   return (
-    <ThemeTransitionProvider>
+    <ThemeTransitionProvider initialTheme="light">
       <MyApp />
     </ThemeTransitionProvider>
   );
@@ -138,9 +137,8 @@ Creates a Provider and hooks from your theme definitions. Validates that all the
 const { ThemeTransitionProvider, useTheme } =
   createThemeTransition({
     themes: { light, dark },
-    defaultTheme: 'light',
     duration: 350,
-    onTransitionEnd: (name) => analytics.track('theme_switch', { theme: name }),
+    onThemeChange: (name) => analytics.track('theme_switch', { theme: name }),
   });
 ```
 
@@ -149,10 +147,9 @@ const { ThemeTransitionProvider, useTheme } =
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. The name `'system'` is reserved. |
-| `defaultTheme` | `keyof themes` | *required* | Theme used on first render. |
 | `duration` | `number` | `350` | Fade-out animation duration in milliseconds. |
-| `systemThemeMap` | `{ light?: ThemeName, dark?: ThemeName }` | | Maps OS appearance to theme names. Required when your themes are not named `'light'` and `'dark'` and you want to use system mode. |
-| `onTransitionEnd` | `(name: string) => void` | | Called after the fade completes and the overlay is removed. |
+| `systemThemeMap` | `{ light: ThemeName, dark: ThemeName }` | | Maps OS appearance to theme names. Required when your themes are not named `'light'` and `'dark'` and you want to use system mode. Both keys must be provided. |
+| `onThemeChange` | `(name: ThemeName) => void` | | Called whenever the active theme changes — animated, instant, or system-driven. For animated transitions, fires after the fade completes. |
 
 #### Type inference
 
@@ -164,7 +161,6 @@ const dark  = { background: '#000', text: '#fff', primary: '#0A84FF' };
 
 const { useTheme } = createThemeTransition({
   themes: { light, dark },
-  defaultTheme: 'light',
 });
 
 // In any component:
@@ -192,7 +188,7 @@ Wraps your app tree and provides the theme context.
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `children` | `ReactNode` | *required* | Your application tree. |
-| `initialTheme` | `ThemeName \| 'system'` | Value of `defaultTheme` | Starting theme or `'system'` to follow the OS appearance. When `'system'`, reads `Appearance.getColorScheme()` synchronously on the first frame (zero-flash) and subscribes to system changes. For custom theme names, provide `systemThemeMap` in the config. |
+| `initialTheme` | `ThemeName \| 'system'` | *required* | Theme to render on the first frame. Pass `'system'` to read the OS appearance synchronously (zero-flash) and subscribe to changes. For custom theme names, provide `systemThemeMap` in the config. |
 
 ---
 
@@ -223,11 +219,12 @@ const { colors, name, setTheme, isTransitioning } = useTheme();
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `animated` | `boolean` | `true` | When `false`, switches instantly without animation. |
-| `onCaptured` | `() => void` | | Called after the screenshot is captured, just before the theme switch is applied. Only called when `animated` is `true`. |
+| `onTransitionStart` | `(name: ThemeName) => void` | | Called when the animated transition begins, before the screenshot capture. Only fires when `animated` is `true` (the default). |
+| `onTransitionEnd` | `(name: ThemeName) => void` | | Called after the animated transition completes and the overlay is removed. Only fires when `animated` is `true` (the default). Fires after the config-level `onThemeChange`. |
 
 ```ts
 setTheme('dark', {
-  onCaptured: () => {
+  onTransitionStart: () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   },
 });
@@ -244,8 +241,8 @@ import type {
   ThemeDefinition,         // Record<string, string> — shape of a single theme
   ThemeTransitionConfig,   // Config object for createThemeTransition
   ThemeTransitionAPI,      // Return type of createThemeTransition
-  SystemThemeMap,          // systemThemeMap type ({ light?: ThemeName, dark?: ThemeName })
-  SetThemeOptions,         // Options for setTheme ({ animated, onCaptured })
+  SystemThemeMap,          // systemThemeMap type ({ light: ThemeName, dark: ThemeName })
+  SetThemeOptions,         // Options for setTheme ({ animated, onTransitionStart, onTransitionEnd })
   ThemeNames,              // Union of theme name strings
   TokenNames,              // Union of color token strings
 } from 'react-native-theme-transition';
@@ -268,7 +265,6 @@ With custom theme names, add `systemThemeMap` to the config:
 ```ts
 export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
   themes: { sunrise, midnight, ocean },
-  defaultTheme: 'sunrise',
   systemThemeMap: { light: 'sunrise', dark: 'midnight' },
 });
 ```
@@ -316,7 +312,7 @@ function ThemeSettings() {
 import * as Haptics from 'expo-haptics';
 
 setTheme('dark', {
-  onCaptured: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+  onTransitionStart: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
 });
 ```
 

@@ -28,12 +28,13 @@ export type TokenNames<T extends Record<string, ThemeDefinition>> =
  * Maps OS color schemes (`'light'` / `'dark'`) to theme names.
  *
  * @remarks
- * Only required when your themes are not named `'light'` and `'dark'`.
+ * Required when your themes are not named `'light'` and `'dark'`.
+ * Both keys must be provided.
  *
  * @typeParam Names - Union of theme name strings.
  */
 export type SystemThemeMap<Names extends string> =
-  Partial<Record<'light' | 'dark', Names>>;
+  Record<'light' | 'dark', Names>;
 
 /**
  * Configuration for {@link createThemeTransition}.
@@ -51,9 +52,6 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    */
   themes: T;
 
-  /** Name of the theme applied on first render. */
-  defaultTheme: ThemeNames<T>;
-
   /**
    * Cross-fade duration in milliseconds.
    * @default 350
@@ -66,21 +64,29 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    * @remarks
    * Required when your themes are not named `'light'` and `'dark'`
    * and you want to use `initialTheme="system"` or `setTheme('system')`.
+   * Both `light` and `dark` must be provided.
    */
   systemThemeMap?: SystemThemeMap<ThemeNames<T>>;
 
   /**
-   * Called after a theme transition completes and the overlay is removed.
+   * Called whenever the active theme changes.
+   *
+   * @remarks
+   * Fires for all theme changes: animated transitions, instant switches,
+   * and system-driven appearance changes. For animated transitions,
+   * fires after the fade completes.
    *
    * @param themeName - The newly active theme name.
    */
-  onTransitionEnd?: (themeName: ThemeNames<T>) => void;
+  onThemeChange?: (themeName: ThemeNames<T>) => void;
 }
 
 /**
  * Options for {@link ThemeTransitionAPI.useTheme | setTheme}.
+ *
+ * @typeParam Names - Union of theme name strings.
  */
-export interface SetThemeOptions {
+export interface SetThemeOptions<Names extends string = string> {
   /**
    * Whether to use the screenshot-overlay cross-fade animation.
    *
@@ -93,12 +99,25 @@ export interface SetThemeOptions {
   animated?: boolean;
 
   /**
-   * Called after the screenshot is captured, just before the theme switch is applied.
+   * Called when the animated transition begins, before the screenshot capture.
    *
    * @remarks
    * Only called when `animated` is `true` (the default).
+   *
+   * @param themeName - The target theme name.
    */
-  onCaptured?: () => void;
+  onTransitionStart?: (themeName: Names) => void;
+
+  /**
+   * Called after the animated transition completes and the overlay is removed.
+   *
+   * @remarks
+   * Only called when `animated` is `true` (the default).
+   * Fires after the config-level `onThemeChange` (if provided).
+   *
+   * @param themeName - The newly active theme name.
+   */
+  onTransitionEnd?: (themeName: Names) => void;
 }
 
 /**
@@ -115,7 +134,7 @@ export interface ThemeTransitionContextValue<
   /** Name of the currently active theme (resolved, never `'system'`). */
   name: Names;
   /** Switch to a new theme or enter system mode. */
-  setTheme: (name: Names | 'system', options?: SetThemeOptions) => void;
+  setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => void;
   /** `true` while a cross-fade transition overlay is visible. */
   isTransitioning: boolean;
 }
@@ -136,16 +155,14 @@ export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
   ThemeTransitionProvider: React.FC<{
     children: React.ReactNode;
     /**
-     * Initial theme or system mode.
+     * Theme to render on the first frame.
      *
      * @remarks
-     * Pass `'system'` to read the OS appearance on the first frame (zero-flash)
+     * Pass `'system'` to read the OS appearance synchronously (zero-flash)
      * and subscribe to changes. For custom theme names, provide
      * {@link ThemeTransitionConfig.systemThemeMap | systemThemeMap} in the config.
-     *
-     * Defaults to {@link ThemeTransitionConfig.defaultTheme} when omitted.
      */
-    initialTheme?: ThemeNames<T> | 'system';
+    initialTheme: ThemeNames<T> | 'system';
   }>;
 
   /**
@@ -166,7 +183,7 @@ export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
      * @param name - Target theme name or `'system'`.
      * @param options - Optional transition callbacks.
      */
-    setTheme: (name: ThemeNames<T> | 'system', options?: SetThemeOptions) => void;
+    setTheme: (name: ThemeNames<T> | 'system', options?: SetThemeOptions<ThemeNames<T>>) => void;
     /** `true` while a cross-fade transition is in progress. */
     isTransitioning: boolean;
   };

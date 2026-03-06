@@ -14,9 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `useTheme` hook returning `colors`, `name`, `setTheme`, and `isTransitioning`
 - Built-in system theme support via `initialTheme="system"` and `setTheme('system')`
 - `systemThemeMap` config option for mapping OS appearance to custom theme names
-- `setTheme` options with `animated` flag and `onCaptured` callback
+- `setTheme` options: `animated`, `onTransitionStart`, and per-call `onTransitionEnd`
 - Touch-blocking layer via Reanimated shared values to prevent interaction during transitions
-- `onTransitionEnd` configuration callback
+- `onThemeChange` configuration callback for all theme changes (animated, instant, and system-driven)
 - Configurable fade `duration` (default 350ms)
 - React Compiler compatibility (no manual memoization required)
 

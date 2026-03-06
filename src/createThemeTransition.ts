@@ -3,8 +3,7 @@
  *
  * @remarks
  * Validates theme configuration at initialization: ensures at least one theme
- * exists, that {@link ThemeTransitionConfig.defaultTheme | defaultTheme} refers
- * to an actual theme, and that all themes share identical token keys.
+ * exists and that all themes share identical token keys.
  * Returns a self-contained API ({@link ThemeTransitionAPI}) with no singletons,
  * so multiple theme scopes can coexist in the same app.
  *
@@ -31,7 +30,6 @@ import { createUseTheme } from './hooks/useTheme';
  * ```tsx
  * const { ThemeTransitionProvider, useTheme } = createThemeTransition({
  *   themes: { light: { bg: '#fff' }, dark: { bg: '#000' } },
- *   defaultTheme: 'light',
  * });
  * ```
  */
@@ -50,18 +48,14 @@ export function createThemeTransition<
     );
   }
 
-  if (!(config.defaultTheme in config.themes)) {
-    throw new Error(
-      `[react-native-theme-transition] \`defaultTheme\` "${config.defaultTheme}" does not exist in themes.`,
-    );
-  }
-
-  const referenceKeys = Object.keys(config.themes[config.defaultTheme]).sort();
+  const referenceTheme = themeNames[0];
+  const referenceKeys = Object.keys(config.themes[referenceTheme]).sort();
   for (const name of themeNames) {
+    if (name === referenceTheme) continue;
     const keys = Object.keys(config.themes[name]).sort();
     if (keys.length !== referenceKeys.length || keys.some((k, i) => k !== referenceKeys[i])) {
       throw new Error(
-        `[react-native-theme-transition] Theme "${name}" has different token keys than "${config.defaultTheme}". All themes must share identical keys.`,
+        `[react-native-theme-transition] Theme "${name}" has different token keys than "${referenceTheme}". All themes must share identical keys.`,
       );
     }
   }
