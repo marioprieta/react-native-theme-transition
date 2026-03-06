@@ -45,6 +45,10 @@ export function createUseSystemTheme<
       const resolveTheme = (scheme: 'light' | 'dark') =>
         mappingRef.current?.[scheme] ?? (scheme as Names);
 
+      // Sync with the current system scheme on mount.
+      const initialScheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
+      setTheme(resolveTheme(initialScheme), { animated: false });
+
       // Ignore appearance events fired while backgrounded (iOS fires with
       // incorrect values during its snapshot capture). When the app returns
       // to foreground, read the real scheme and apply instantly — no animation,

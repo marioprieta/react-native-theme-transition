@@ -53,7 +53,7 @@ export interface AnimatedThemeConfig<T extends Record<string, ThemeDefinition>> 
    *
    * @param themeName - The newly active theme name.
    */
-  onTransitionEnd?: (themeName: string) => void;
+  onTransitionEnd?: (themeName: ThemeNames<T>) => void;
 }
 
 /**

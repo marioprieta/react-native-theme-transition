@@ -13,7 +13,7 @@
  * @module
  */
 
-import { createContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, View } from 'react-native';
 import Animated, {
   useAnimatedProps,
@@ -116,7 +116,7 @@ export function createProviderAndContext<
       };
     }, []);
 
-    async function transition(name: Names, onCaptured?: () => void) {
+    const transition = useCallback(async (name: Names, onCaptured?: () => void) => {
       try {
         // Pending React state (e.g. disabled buttons) must commit before we capture,
         // otherwise the screenshot contains stale UI.
@@ -163,10 +163,11 @@ export function createProviderAndContext<
         transitioningRef.current = false;
         isBlocking.value = false;
         setIsTransitioning(false);
+        onTransitionEnd?.(name);
       }
-    }
+    }, [isBlocking, overlayOpacity]);
 
-    function setTheme(name: Names, options?: SetThemeOptions) {
+    const setTheme = useCallback((name: Names, options?: SetThemeOptions) => {
       if (name === targetRef.current) return;
       if (transitioningRef.current) return;
 
@@ -175,7 +176,6 @@ export function createProviderAndContext<
       // Instant switch — skip screenshot/overlay entirely.
       if (options?.animated === false) {
         setResolved({ colors: { ...themes[name] } as Record<Tokens, string>, name });
-        onTransitionEnd?.(name);
         return;
       }
 
@@ -184,9 +184,11 @@ export function createProviderAndContext<
 
       setIsTransitioning(true);
       transition(name, options?.onCaptured);
-    }
+    }, [isBlocking, transition]);
 
-    const value = { colors: resolved.colors, name: resolved.name, setTheme, isTransitioning };
+    const value = useMemo(() => ({
+      colors: resolved.colors, name: resolved.name, setTheme, isTransitioning,
+    }), [resolved, setTheme, isTransitioning]);
 
     return (
       <Context.Provider value={value}>
@@ -198,7 +200,7 @@ export function createProviderAndContext<
           <Animated.View style={FILL} animatedProps={blockerProps} />
           {overlayUri != null ? (
             <Animated.View style={[FILL, overlayStyle]} pointerEvents="none">
-              <Image source={{ uri: overlayUri }} style={FILL} resizeMode="cover" />
+              <Image source={{ uri: overlayUri }} style={FILL} resizeMode="cover" fadeDuration={0} />
             </Animated.View>
           ) : null}
         </View>
