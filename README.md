@@ -27,7 +27,7 @@ This library takes a different approach: capture a screenshot, overlay it, switc
 - **Smooth cross-fade transitions.** Screenshot-overlay technique powered by Reanimated on the native UI thread, matching your display's refresh rate (60–120 FPS).
 - **Expo Go compatible.** No native code, no prebuilds.
 - **Built-in theme management.** Provider, typed hooks, and deep generic inference out of the box.
-- **System theme sync.** `initialTheme="system"` and `setTheme('system')` for zero-flash OS appearance tracking at startup and runtime.
+- **System theme sync.** Animates when the OS appearance changes; instant switch when returning from background.
 - **Transition guard.** Blocks concurrent transitions and exposes `isTransitioning`.
 - **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules). Works with and without the compiler.
 - **Tiny footprint.** ~12 kB compressed, zero runtime dependencies.
@@ -41,7 +41,7 @@ This library takes a different approach: capture a screenshot, overlay it, switc
 | Execution | Pure JS / Reanimated + Worklets | Native modules (Java/ObjC) | JS thread |
 | Theme state management | ✅ Provider + typed hooks | ❌ Bring your own | ❌ Bring your own |
 | TypeScript generics | ✅ Deep inference for tokens | ⚠️ Basic typings | ❌ Manual |
-| System theme listener | ✅ Built-in (`initialTheme="system"`) | ❌ Not included | ❌ Manual |
+| System theme listener | ✅ Built-in (`useSystemTheme`) | ❌ Not included | ❌ Manual |
 | React Compiler | ✅ | ❌ | Depends on code |
 | New Architecture (Fabric) | ✅ | ✅ | ✅ |
 
@@ -52,12 +52,12 @@ This library takes a different approach: capture a screenshot, overlay it, switc
 npx expo install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
 
 # React Native CLI
-npm install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
+yarn add react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
 ```
 
 > **Already using Expo SDK 54+?** `react-native-reanimated`, `react-native-view-shot`, and `react-native-worklets` are already included. Just install `react-native-theme-transition`.
 
-> **CLI users:** Add `react-native-worklets/plugin` as the **last plugin** in your `babel.config.js` and run `npx pod-install` for iOS.
+> **CLI users:** Add `react-native-worklets/plugin` to your `babel.config.js` and run `npx pod-install` for iOS.
 
 ## Quick start
 
@@ -81,7 +81,7 @@ const dark = {
   primary:    '#0A84FF',
 };
 
-export const { ThemeTransitionProvider, useTheme } =
+export const { ThemeTransitionProvider, useTheme, useSystemTheme } =
   createThemeTransition({
     themes: { light, dark },
     defaultTheme: 'light',
@@ -135,7 +135,7 @@ function MyScreen() {
 Creates a Provider and hooks from your theme definitions. Validates that all themes share the same token keys at initialization, so mismatches are caught immediately during development.
 
 ```ts
-const { ThemeTransitionProvider, useTheme } =
+const { ThemeTransitionProvider, useTheme, useSystemTheme } =
   createThemeTransition({
     themes: { light, dark },
     defaultTheme: 'light',
@@ -148,10 +148,9 @@ const { ThemeTransitionProvider, useTheme } =
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. The name `'system'` is reserved. |
+| `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. |
 | `defaultTheme` | `keyof themes` | *required* | Theme used on first render. |
 | `duration` | `number` | `350` | Fade-out animation duration in milliseconds. |
-| `systemThemeMap` | `{ light?: ThemeName, dark?: ThemeName }` | | Maps OS appearance to theme names. Required when your themes are not named `'light'` and `'dark'` and you want to use system mode. |
 | `onTransitionEnd` | `(name: string) => void` | | Called after the fade completes and the overlay is removed. Use it to persist the selected theme to storage or log analytics. |
 
 #### Type inference
@@ -184,7 +183,7 @@ setTheme('ocean') // ❌ TypeScript error: Argument not assignable
 Wraps your app tree and provides the theme context.
 
 ```tsx
-<ThemeTransitionProvider initialTheme="system">
+<ThemeTransitionProvider initialTheme="dark">
   <App />
 </ThemeTransitionProvider>
 ```
@@ -192,7 +191,7 @@ Wraps your app tree and provides the theme context.
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `children` | `ReactNode` | *required* | Your application tree. |
-| `initialTheme` | `ThemeName \| 'system'` | Value of `defaultTheme` | Starting theme or `'system'` to follow the OS appearance. When `'system'`, reads `Appearance.getColorScheme()` synchronously on the first frame (zero-flash) and subscribes to system changes. For custom theme names, provide `systemThemeMap` in the config. |
+| `initialTheme` | `ThemeName` | Value of `defaultTheme` | Overrides `defaultTheme` for this provider instance. Use when the starting theme depends on runtime data — for example, a persisted user preference loaded from storage, or the current system appearance. Renders on the first frame before effects run, preventing a flash of the wrong theme. |
 
 ---
 
@@ -207,15 +206,13 @@ const { colors, name, setTheme, isTransitioning } = useTheme();
 | Property | Type | Description |
 |---|---|---|
 | `colors` | `{ [token]: string }` | Current theme's color values, fully typed to your token names. |
-| `name` | `ThemeName` | Active theme identifier (e.g. `'light'`, `'dark'`). Always the resolved name, never `'system'`. |
-| `setTheme` | `(name, options?) => void` | Triggers a transition to the given theme, or pass `'system'` to follow the OS appearance. |
+| `name` | `ThemeName` | Active theme identifier (e.g. `'light'`, `'dark'`). |
+| `setTheme` | `(name, options?) => void` | Triggers a screenshot-overlay transition to the given theme. |
 | `isTransitioning` | `boolean` | `true` from when `setTheme` is called until the fade animation ends. |
 
 **Behavior:**
 - Calling `setTheme` with the **current** theme name is a no-op.
 - Calling it **during** an ongoing transition is silently ignored.
-- `setTheme('system')` enters system mode — the provider subscribes to OS appearance changes.
-- `setTheme('dark')` (or any theme name) exits system mode.
 - Use `isTransitioning` to disable toggle buttons or defer expensive renders.
 
 #### `setTheme` options
@@ -236,6 +233,28 @@ setTheme('dark', {
 
 ---
 
+### `useSystemTheme(enabled?, mapping?)`
+
+Subscribes to OS appearance changes and triggers theme transitions automatically. On mount, performs an instant (non-animated) sync with the current system appearance. Animates when the app is in the foreground (e.g. Control Center toggle) and switches instantly when the app returns from the background, matching native platform behavior.
+
+```ts
+// Follow system theme (assumes your themes are named 'light' and 'dark')
+useSystemTheme(true);
+
+// Conditionally enable based on user preference
+useSystemTheme(colorMode === 'system');
+
+// Map OS schemes to custom theme names
+useSystemTheme(true, { light: 'sunrise', dark: 'midnight' });
+```
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | When `true` or omitted, subscribes to `Appearance` changes. Pass `false` explicitly to deactivate the listener. |
+| `mapping` | `{ light?: ThemeName, dark?: ThemeName }` | | Maps OS color schemes to your theme names. If omitted, assumes your themes are named `'light'` and `'dark'`. |
+
+> Must be called inside `ThemeTransitionProvider`. Calls `setTheme` internally with animated transitions in the foreground and instant switches when returning from background.
+
 ### Exported types
 
 For advanced TypeScript usage, these types are available as named imports:
@@ -245,7 +264,6 @@ import type {
   ThemeDefinition,         // Record<string, string> — shape of a single theme
   ThemeTransitionConfig,   // Config object for createThemeTransition
   ThemeTransitionAPI,      // Return type of createThemeTransition
-  SystemThemeMap,          // systemThemeMap type ({ light?: ThemeName, dark?: ThemeName })
   SetThemeOptions,         // Options for setTheme ({ animated, onCaptured })
   ThemeNames,              // Union of theme name strings
   TokenNames,              // Union of color token strings
@@ -258,72 +276,23 @@ import type {
 
 ### Start with the system theme
 
-Pass `initialTheme="system"` to follow the OS appearance with zero-flash on the first frame:
+`useSystemTheme` syncs with the current system appearance on mount (instant, no animation). Pass `initialTheme` to match the system on the very first frame, preventing a brief flash before the effect runs:
 
 ```tsx
-import { ThemeTransitionProvider } from './theme';
+import { Appearance } from 'react-native';
+import { ThemeTransitionProvider, useSystemTheme } from './theme';
+
+function SystemThemeListener() {
+  useSystemTheme(true);
+  return null;
+}
 
 export default function App() {
   return (
-    <ThemeTransitionProvider initialTheme="system">
+    <ThemeTransitionProvider initialTheme={Appearance.getColorScheme() ?? 'light'}>
+      <SystemThemeListener />
       <MyApp />
     </ThemeTransitionProvider>
-  );
-}
-```
-
-With custom theme names, add `systemThemeMap` to the config:
-
-```ts
-export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
-  themes: { sunrise, midnight, ocean },
-  defaultTheme: 'sunrise',
-  systemThemeMap: { light: 'sunrise', dark: 'midnight' },
-});
-```
-
-```tsx
-<ThemeTransitionProvider initialTheme="system">
-  <MyApp />
-</ThemeTransitionProvider>
-```
-
-### Persisted preference with system option
-
-Store the user's preference as `'light' | 'dark' | 'system'` (or your custom theme names + `'system'`). Pass it directly to `initialTheme` — no branching needed:
-
-```tsx
-import { ThemeTransitionProvider } from './theme';
-import { useStoredPreference } from './storage';
-
-export default function App() {
-  const stored = useStoredPreference(); // 'light' | 'dark' | 'system'
-
-  return (
-    <ThemeTransitionProvider initialTheme={stored}>
-      <MyApp />
-    </ThemeTransitionProvider>
-  );
-}
-```
-
-In a settings screen, use `setTheme` to switch modes at runtime:
-
-```tsx
-function ThemeSettings() {
-  const { setTheme } = useTheme();
-
-  const handleSelect = (preference: 'light' | 'dark' | 'system') => {
-    setTheme(preference);
-    AsyncStorage.setItem('theme', preference);
-  };
-
-  return (
-    <>
-      <Button title="Light" onPress={() => handleSelect('light')} />
-      <Button title="Dark" onPress={() => handleSelect('dark')} />
-      <Button title="System" onPress={() => handleSelect('system')} />
-    </>
   );
 }
 ```
@@ -342,11 +311,13 @@ setTheme('dark', {
 
 ```tsx
 function ThemeBridge() {
-  const colorMode = useThemeStore((s) => s.colorMode); // 'light' | 'dark' | 'system'
+  const colorMode = useThemeStore((s) => s.colorMode);
   const { setTheme } = useTheme();
 
+  useSystemTheme(colorMode === 'system');
+
   useEffect(() => {
-    setTheme(colorMode);
+    if (colorMode !== 'system') setTheme(colorMode);
   }, [colorMode, setTheme]);
 
   return null;
@@ -354,8 +325,6 @@ function ThemeBridge() {
 ```
 
 ### React Navigation theme sync
-
-Map your color tokens to React Navigation's theme shape. Adjust the token names to match your own theme definition:
 
 ```tsx
 import { useTheme } from './theme';
@@ -366,7 +335,7 @@ function App() {
   const navigationTheme = {
     dark: name === 'dark',
     colors: {
-      primary: colors.primary,       // adjust to your token names
+      primary: colors.primary,
       background: colors.background,
       card: colors.card,
       text: colors.text,

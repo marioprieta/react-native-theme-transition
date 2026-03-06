@@ -14,7 +14,7 @@
  */
 
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Appearance, AppState, Image, View } from 'react-native';
+import { Image, View } from 'react-native';
 import Animated, {
   useAnimatedProps,
   useAnimatedStyle,
@@ -27,7 +27,6 @@ import type {
   ThemeTransitionConfig,
   ThemeTransitionContextValue,
   SetThemeOptions,
-  SystemThemeMap,
   ThemeDefinition,
   ThemeNames,
   TokenNames,
@@ -64,22 +63,6 @@ function waitFrames(n: number): Promise<void> {
 }
 
 /**
- * Resolves the current OS color scheme to a theme name using an optional mapping.
- *
- * @remarks
- * Called synchronously during the provider's first render so the initial
- * theme matches the system appearance without a one-frame flash.
- *
- * @internal
- */
-function resolveSystemScheme<Names extends string>(
-  mapping?: SystemThemeMap<Names>,
-): Names {
-  const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
-  return mapping?.[scheme] ?? (scheme as Names);
-}
-
-/**
  * Creates the React Context and provider component for a given theme configuration.
  *
  * @internal Used by {@link createThemeTransition}; not part of the public API.
@@ -87,7 +70,7 @@ function resolveSystemScheme<Names extends string>(
 export function createProviderAndContext<
   T extends Record<string, ThemeDefinition>,
 >(config: ThemeTransitionConfig<T>) {
-  const { themes, defaultTheme, duration = 350, onTransitionEnd, systemThemeMap } = config;
+  const { themes, defaultTheme, duration = 350, onTransitionEnd } = config;
 
   type Names = ThemeNames<T>;
   type Tokens = TokenNames<T>;
@@ -99,21 +82,9 @@ export function createProviderAndContext<
     initialTheme,
   }: {
     children: React.ReactNode;
-    initialTheme?: Names | 'system';
+    initialTheme?: Names;
   }) {
-    // Resolve 'system' synchronously on frame 0 — no flash.
-    const isInitialSystem = initialTheme === 'system';
-    const startTheme = isInitialSystem
-      ? resolveSystemScheme<Names>(systemThemeMap)
-      : (initialTheme ?? defaultTheme);
-
-    if (!(startTheme in themes)) {
-      throw new Error(
-        `[react-native-theme-transition] initialTheme resolved to "${startTheme}" which does not exist in themes.${
-          isInitialSystem ? ' Provide `systemThemeMap` in the config to map OS appearance to your theme names.' : ''
-        }`,
-      );
-    }
+    const startTheme = initialTheme ?? defaultTheme;
 
     const [resolved, setResolved] = useState(() => ({
       colors: { ...themes[startTheme] } as Record<Tokens, string>,
@@ -126,11 +97,6 @@ export function createProviderAndContext<
     // Guards async callbacks against running after unmount.
     const mountedRef = useRef(true);
     const [isTransitioning, setIsTransitioning] = useState(false);
-
-    // Tracks whether the provider is in system-following mode.
-    // Mutable ref so toggling doesn't trigger re-subscriptions — the effect
-    // reads the latest value on each Appearance/AppState callback.
-    const systemModeRef = useRef(isInitialSystem);
 
     // Drives pointerEvents on the blocker overlay via the UI thread (useAnimatedProps),
     // bypassing React reconciliation so blocking is active within one native frame.
@@ -201,16 +167,7 @@ export function createProviderAndContext<
       }
     }, [isBlocking, overlayOpacity]);
 
-    /**
-     * Resolves a scheme to a theme name using the factory-level systemThemeMap.
-     * Pure function — safe to call from any callback without stale closures.
-     */
-    const resolveScheme = useCallback((scheme: 'light' | 'dark'): Names => {
-      return systemThemeMap?.[scheme] ?? (scheme as Names);
-    }, []);
-
-    // Core theme setter that handles both direct themes and 'system' mode.
-    const applyTheme = useCallback((name: Names, options?: SetThemeOptions) => {
+    const setTheme = useCallback((name: Names, options?: SetThemeOptions) => {
       if (name === targetRef.current) return;
       if (transitioningRef.current) return;
 
@@ -228,52 +185,6 @@ export function createProviderAndContext<
       setIsTransitioning(true);
       transition(name, options?.onCaptured);
     }, [isBlocking, transition]);
-
-    // Public setTheme: accepts ThemeName | 'system'.
-    const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions) => {
-      if (name === 'system') {
-        systemModeRef.current = true;
-        const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
-        applyTheme(resolveScheme(scheme), options);
-      } else {
-        // Explicit theme selection exits system mode.
-        systemModeRef.current = false;
-        applyTheme(name, options);
-      }
-    }, [applyTheme, resolveScheme]);
-
-    const appStateRef = useRef(AppState.currentState);
-
-    // Single long-lived subscription to Appearance + AppState.
-    // The callbacks check systemModeRef to decide whether to act,
-    // so toggling system mode doesn't require re-subscribing.
-    useEffect(() => {
-      const appearanceSub = Appearance.addChangeListener(({ colorScheme }) => {
-        if (!systemModeRef.current) return;
-        const scheme = (colorScheme ?? 'light') as 'light' | 'dark';
-        if (appStateRef.current === 'active') {
-          applyTheme(resolveScheme(scheme));
-        } else {
-          // Instant while backgrounded so React state matches the iOS snapshot.
-          applyTheme(resolveScheme(scheme), { animated: false });
-        }
-      });
-
-      // Safety net: re-read the scheme on foreground return to correct
-      // stale values from iOS snapshot capture bug.
-      const appSub = AppState.addEventListener('change', (next) => {
-        if (appStateRef.current !== 'active' && next === 'active' && systemModeRef.current) {
-          const scheme = (Appearance.getColorScheme() ?? 'light') as 'light' | 'dark';
-          applyTheme(resolveScheme(scheme), { animated: false });
-        }
-        appStateRef.current = next;
-      });
-
-      return () => {
-        appearanceSub.remove();
-        appSub.remove();
-      };
-    }, [applyTheme, resolveScheme]);
 
     const value = useMemo(() => ({
       colors: resolved.colors, name: resolved.name, setTheme, isTransitioning,
