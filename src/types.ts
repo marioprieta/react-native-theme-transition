@@ -61,11 +61,24 @@ export interface AnimatedThemeConfig<T extends Record<string, ThemeDefinition>> 
  */
 export interface SetThemeOptions {
   /**
-   * Called once the screenshot overlay is visible, before the fade starts.
+   * Whether to use the screenshot-overlay cross-fade animation.
    *
    * @remarks
-   * Useful for deferring heavy state updates or network requests until
-   * the UI is safely masked by the static overlay image.
+   * When `false`, the theme switches instantly without capturing a screenshot
+   * or showing an overlay. Useful for system theme changes that happen while
+   * the app is in the background.
+   *
+   * @default true
+   */
+  animated?: boolean;
+
+  /**
+   * Called after the screenshot is captured, just before the theme switch is applied.
+   *
+   * @remarks
+   * At this point the screenshot will be displayed as a static overlay on the
+   * next frame — ideal for triggering haptic feedback or logging analytics.
+   * Only called when `animated` is `true` (the default).
    */
   onCaptured?: () => void;
 }
@@ -139,7 +152,8 @@ export interface AnimatedThemeAPI<T extends Record<string, ThemeDefinition>> {
   /**
    * Hook that syncs the active theme with the system appearance (light/dark).
    *
-   * @param enabled - Whether synchronization is active. Defaults to `true`.
+   * @param enabled - When `true` or omitted, subscribes to OS appearance changes.
+   *   Pass `false` explicitly to deactivate the listener.
    * @param mapping - Maps system appearance to theme names. Falls back to
    *   using the appearance value (`'light'`/`'dark'`) as the theme name.
    *

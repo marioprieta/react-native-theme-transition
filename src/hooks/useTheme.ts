@@ -30,7 +30,7 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
     const ctx = useContext(Ctx);
     if (!ctx) {
       throw new Error(
-        '[react-native-theme-transition] useTheme must be used within AnimatedThemeProvider',
+        '[react-native-theme-transition] `useTheme` must be used inside an `AnimatedThemeProvider`.',
       );
     }
     return ctx as ThemeValue;

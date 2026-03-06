@@ -42,12 +42,12 @@ export function createAnimatedTheme<
   const themeNames = Object.keys(config.themes) as ThemeNames<T>[];
 
   if (themeNames.length === 0) {
-    throw new Error('[react-native-theme-transition] At least one theme must be provided.');
+    throw new Error('[react-native-theme-transition] `themes` must contain at least one theme.');
   }
 
   if (!(config.defaultTheme in config.themes)) {
     throw new Error(
-      `[react-native-theme-transition] Default theme "${config.defaultTheme}" not found.`,
+      `[react-native-theme-transition] \`defaultTheme\` "${config.defaultTheme}" does not exist in themes.`,
     );
   }
 
@@ -56,7 +56,7 @@ export function createAnimatedTheme<
     const keys = Object.keys(config.themes[name]).sort();
     if (keys.length !== referenceKeys.length || keys.some((k, i) => k !== referenceKeys[i])) {
       throw new Error(
-        `[react-native-theme-transition] Theme "${name}" has different keys than "${config.defaultTheme}".`,
+        `[react-native-theme-transition] Theme "${name}" has different token keys than "${config.defaultTheme}". All themes must share identical keys.`,
       );
     }
   }

@@ -7,6 +7,7 @@
     "module": "esnext",
     "skipLibCheck": true,
     "declaration": true,
+    "removeComments": false,
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "dist",

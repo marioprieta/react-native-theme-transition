@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `useTheme` hook returning `colors`, `name`, `setTheme`, and `isTransitioning`
 - `useSystemTheme` hook for automatic OS appearance following
 - `setTheme` options with `onCaptured` callback for haptic feedback integration
-- Gesture-blocking layer to prevent interaction during transitions
+- Touch-blocking layer via Reanimated shared values to prevent interaction during transitions
 - `onTransitionEnd` configuration callback
 - Configurable fade `duration` (default 350ms)
 - React Compiler compatibility (no manual memoization required)
