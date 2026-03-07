@@ -30,7 +30,7 @@ This library takes a different approach: capture a screenshot, overlay it, switc
 - **System theme sync.** Follows OS appearance automatically with zero-flash startup and runtime switching.
 - **Transition guard.** Blocks concurrent transitions and exposes `isTransitioning`.
 - **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules). Works with and without the compiler.
-- **Tiny footprint.** ~13 kB source, zero runtime dependencies.
+- **Tiny footprint.** ~13 kB runtime footprint, zero runtime dependencies.
 
 ## Comparison
 
