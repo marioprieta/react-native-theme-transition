@@ -20,7 +20,7 @@ Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS
 
 Theme transitions in React Native have always needed custom native modules. That means no Expo Go, no OTA updates, and extra maintenance for each platform.
 
-This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a smooth cross-fade that works everywhere, no native code needed. All peer dependencies are already included in Expo SDK 54+.
+This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a smooth cross-fade that works everywhere, no native code needed. All peer dependencies are bundled in Expo Go (SDK 54+). Only `react-native-view-shot` and `react-native-worklets` need to be added to your project.
 
 ## Features
 
@@ -30,20 +30,21 @@ This library takes a different approach: capture a screenshot, overlay it, switc
 - **System theme sync.** Follows OS appearance automatically with zero-flash startup and runtime switching.
 - **Transition guard.** Blocks concurrent transitions and exposes `isTransitioning`.
 - **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules). Works with and without the compiler.
-- **Tiny footprint.** ~12 kB compressed, zero runtime dependencies.
+- **Tiny footprint.** ~13 kB source, zero runtime dependencies.
 
 ## Comparison
 
-| Feature | react-native-theme-transition | react-native-theme-switch-animation | No library (manual) |
-|---|:---:|:---:|:---:|
-| Animated transition | ✅ Cross-fade | ✅ Circle/slide reveal | ❌ Instant flash |
-| Expo Go support | ✅ | ❌ Requires prebuild | ✅ |
-| Execution | Pure JS / Reanimated + Worklets | Native modules (Java/ObjC) | JS thread |
-| Theme state management | ✅ Provider + typed hooks | ❌ Bring your own | ❌ Bring your own |
-| TypeScript generics | ✅ Deep inference for tokens | ⚠️ Basic typings | ❌ Manual |
-| System theme listener | ✅ Built-in (`initialTheme="system"`) | ❌ Not included | ❌ Manual |
-| React Compiler | ✅ | ❌ | Depends on code |
-| New Architecture (Fabric) | ✅ | ✅ | ✅ |
+| Feature | react-native-theme-transition | react-native-theme-switch-animation | Uniwind Pro | Unistyles 3 |
+|---|:---:|:---:|:---:|:---:|
+| Animated transition | ✅ Cross-fade | ✅ Fade/circular reveal | ✅ Native snapshot | ❌ None (instant switch) |
+| Expo Go support | ✅ | ❌ Requires prebuild | ❌ Requires prebuild | ❌ Requires prebuild |
+| Execution | Pure JS / Reanimated + Worklets | Native modules (Java/ObjC++) | C++ engine (zero re-renders) | C++ (ShadowTree direct) |
+| Theme state management | ✅ Provider + typed hooks | ❌ Bring your own | ✅ `Uniwind.setTheme` + `useUniwind` | ✅ `UnistylesRuntime` |
+| TypeScript generics | ✅ Deep inference for tokens | ⚠️ Basic typings | ⚠️ Auto-generated dts | ⚠️ Manual type override |
+| System theme listener | ✅ Built-in (`initialTheme="system"`) | ❌ Not included | ✅ Built-in | ✅ Adaptive themes |
+| React Compiler | ✅ | — | — | ✅ Supported (plugin order) |
+| New Architecture (Fabric) | ✅ | ✅ | ✅ | ✅ |
+| Price | Free (MIT) | Free (MIT) | $99/seat/year | Free (MIT) |
 
 ## Installation
 
@@ -55,7 +56,7 @@ npx expo install react-native-theme-transition react-native-reanimated react-nat
 npm install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
 ```
 
-> **Already using Expo SDK 54+?** `react-native-reanimated`, `react-native-view-shot`, and `react-native-worklets` are already included. Just install `react-native-theme-transition`.
+> **Already using Expo SDK 54+?** `react-native-reanimated` is already installed. Run `npx expo install react-native-theme-transition react-native-view-shot react-native-worklets` to add the remaining packages.
 
 > **CLI users:** Add `react-native-worklets/plugin` as the **last plugin** in your `babel.config.js` and run `npx pod-install` for iOS.
 
@@ -165,7 +166,7 @@ For animated transitions, callbacks fire in this order:
 5. Per-call `onTransitionEnd`
 6. Config `onThemeChange`
 
-For instant switches (`animated: false`), only `onThemeChange` fires. If the screenshot capture fails, the theme is applied instantly and only `onThemeChange` fires.
+For instant switches (`animated: false`), only `onThemeChange` fires. If the screenshot capture fails mid-transition, the library falls back to an instant switch — `onTransitionEnd` does **not** fire even though `onTransitionStart` already has. Only `onThemeChange` fires. Design `onTransitionStart` handlers to be resilient to a missing matching `onTransitionEnd`.
 
 #### Type inference
 
@@ -259,6 +260,8 @@ import type {
   ThemeTransitionAPI,      // Return type of createThemeTransition
   SystemThemeMap,          // systemThemeMap type ({ light: ThemeName, dark: ThemeName })
   SetThemeOptions,         // Options for setTheme ({ animated, onTransitionStart, onTransitionEnd })
+  ThemeNames,              // Union of theme name strings: keyof your themes object
+  TokenNames,              // Union of token name strings: keyof your theme values
 } from 'react-native-theme-transition';
 ```
 
@@ -402,6 +405,14 @@ For the full step-by-step breakdown and sequence diagram, see [docs/how-it-works
 - react-native-reanimated >= 4.0.0
 - react-native-view-shot >= 3.0.0
 - react-native-worklets >= 0.5.0
+
+## Agent skill
+
+This package includes an [agent skill](https://skills.sh) that gives AI coding agents (Claude Code, Cursor, Codex, etc.) deep knowledge of the library's API, architecture, recipes, and troubleshooting.
+
+```bash
+npx skills add marioprieta/react-native-theme-transition
+```
 
 ## Contributing
 

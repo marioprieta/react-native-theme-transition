@@ -38,8 +38,9 @@ const ROOT_STYLE = { flex: 1 } as const;
  * 3. **Native UI thread** — platform views are painted on screen.
  *
  * Each phase runs on its own frame cadence (~16.67 ms at 60 fps).
- * Waiting 1 frame lets React flush pending state; waiting 2 frames
- * ensures the native UI thread has repainted the new layout.
+ * Waiting 1 frame lets React flush pending state; waiting 3 frames
+ * gives the shadow tree and native UI thread time to repaint, even on
+ * slower devices or complex layouts.
  *
  * @param n - Number of animation frames to wait.
  */
@@ -57,14 +58,27 @@ function waitFrames(n: number): Promise<void> {
 /**
  * Returns the current OS color scheme, defaulting to `'light'` when unavailable.
  *
+ * @remarks
+ * Only accepts the two known values. Any other input — including `null`,
+ * `undefined`, and `'unspecified'` (returned by RN after
+ * `Appearance.setColorScheme('unspecified')`) — defaults to `'light'`.
+ *
  * @internal
  */
 function getScheme(colorScheme?: string | null): 'light' | 'dark' {
-  return (colorScheme ?? 'light') as 'light' | 'dark';
+  if (colorScheme === 'dark') return 'dark';
+  return 'light';
 }
 
 /**
  * Maps an OS color scheme to a theme name.
+ *
+ * @remarks
+ * The fallback `scheme as Names` is only safe when the themes are named `'light'` and
+ * `'dark'`. Callers that use custom theme names must validate the result against `themes` —
+ * both `ThemeTransitionProvider` (for `initialTheme="system"`) and `setTheme`
+ * (for `setTheme('system')`) perform this validation and throw a clear error if the
+ * resolved name is not a registered theme.
  *
  * @internal
  */
@@ -106,26 +120,26 @@ export function createProviderAndContext<
     children: React.ReactNode;
     initialTheme: Names | 'system';
   }) {
-    const isInitialSystem = initialTheme === 'system';
-    const startScheme = getScheme(Appearance.getColorScheme());
-    const startTheme = isInitialSystem
-      ? resolveScheme<Names>(startScheme, systemThemeMap)
-      : initialTheme;
+    // Initialization runs only once (lazy useState), keeping every subsequent render clean.
+    const [resolved, setResolved] = useState<{ colors: Record<Tokens, string>; name: Names }>(() => {
+      const isInitialSystem = initialTheme === 'system';
+      const startScheme = getScheme(Appearance.getColorScheme());
+      const startTheme = isInitialSystem
+        ? resolveScheme<Names>(startScheme, systemThemeMap)
+        : initialTheme;
 
-    if (!(startTheme in themes)) {
-      throw new Error(
-        `[react-native-theme-transition] initialTheme resolved to "${startTheme}" which does not exist in themes.${
-          isInitialSystem ? ' Provide `systemThemeMap` in the config to map OS appearance to your theme names.' : ''
-        }`,
-      );
-    }
+      if (!(startTheme in themes)) {
+        throw new Error(
+          `[react-native-theme-transition] initialTheme resolved to "${startTheme}" which does not exist in themes.${
+            isInitialSystem ? ' Provide `systemThemeMap` in the config to map OS appearance to your theme names.' : ''
+          }`,
+        );
+      }
 
-    const [resolved, setResolved] = useState(() => ({
-      colors: getColors(startTheme),
-      name: startTheme,
-    }));
+      return { colors: getColors(startTheme), name: startTheme };
+    });
 
-    const targetRef = useRef(startTheme);
+    const targetRef = useRef(resolved.name);
     const rootRef = useRef<View>(null);
     const transitioningRef = useRef(false);
     // Guards async callbacks against running after unmount.
@@ -133,7 +147,7 @@ export function createProviderAndContext<
     const [isTransitioning, setIsTransitioning] = useState(false);
 
     // Tracks whether the provider is in system-following mode.
-    const systemModeRef = useRef(isInitialSystem);
+    const systemModeRef = useRef(initialTheme === 'system');
 
     // Blocks touches within one native frame, without waiting for a React re-render.
     const isBlocking = useSharedValue(false);
@@ -147,6 +161,7 @@ export function createProviderAndContext<
     const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.get() }));
 
     useEffect(() => {
+      mountedRef.current = true;
       return () => {
         mountedRef.current = false;
       };
@@ -165,28 +180,35 @@ export function createProviderAndContext<
         await waitFrames(1);
         if (!mountedRef.current) return;
 
-        const uri = await captureRef(rootRef, { format: 'png', quality: 0.9 });
+        const uri = await captureRef(rootRef, { format: 'jpg', quality: 0.8 });
         if (!mountedRef.current) return;
 
         overlayOpacity.set(1);
         setOverlayUri(uri);
+
+        // Separate React commits: the overlay must mount and paint before the
+        // color switch. Without this yield, both state updates batch into one
+        // commit and Android can paint the new colors before the overlay is visible.
+        await waitFrames(1);
+        if (!mountedRef.current) return;
+
         setResolved({ colors: getColors(name), name });
 
         // Wait for the native UI thread to repaint the new theme beneath the overlay.
-        await waitFrames(2);
+        await waitFrames(3);
         if (!mountedRef.current) return;
 
         const finishTransition = () => {
           if (!mountedRef.current) return;
           resetTransition();
-          configOnTransitionEnd?.(name);
-          options?.onTransitionEnd?.(name);
-          onThemeChange?.(name);
+          try { configOnTransitionEnd?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onTransitionEnd threw:', e); }
+          try { options?.onTransitionEnd?.(name); } catch (e) { console.warn('[react-native-theme-transition] per-call onTransitionEnd threw:', e); }
+          try { onThemeChange?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
         };
 
-        overlayOpacity.set(withTiming(0, { duration }, (finished) => {
+        overlayOpacity.set(withTiming(0, { duration }, () => {
           'worklet';
-          if (finished) scheduleOnRN(finishTransition);
+          scheduleOnRN(finishTransition);
         }));
       } catch (error) {
         // If capture fails, apply theme instantly — no animation beats a stuck overlay.
@@ -197,40 +219,57 @@ export function createProviderAndContext<
         if (!mountedRef.current) return;
         setResolved({ colors: getColors(name), name });
         resetTransition();
-        onThemeChange?.(name);
+        try { onThemeChange?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
       }
-    }, [isBlocking, overlayOpacity, resetTransition]);
+    }, [overlayOpacity, resetTransition]);
 
     const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions<Names>) => {
-      const resolved = name === 'system'
+      const resolvedTheme = name === 'system'
         ? resolveScheme<Names>(getScheme(Appearance.getColorScheme()), systemThemeMap)
         : name;
 
-      if (name === 'system') {
-        systemModeRef.current = true;
-      } else {
-        systemModeRef.current = false;
+      // Guard: setTheme('system') with custom theme names and no systemThemeMap falls back
+      // to 'light'/'dark' which may not be registered themes. Fail loudly instead of
+      // silently producing undefined color tokens.
+      if (!(resolvedTheme in themes)) {
+        throw new Error(
+          `[react-native-theme-transition] setTheme('system') resolved to "${resolvedTheme}" which does not exist in themes. ` +
+          `Provide \`systemThemeMap\` in the config to map OS appearance to your theme names.`,
+        );
       }
 
-      if (resolved === targetRef.current) return;
       if (transitioningRef.current) return;
 
-      targetRef.current = resolved;
+      // Set system mode AFTER the transition guard so a rejected call during an ongoing
+      // transition doesn't silently activate system-following mode.
+      systemModeRef.current = name === 'system';
+
+      if (resolvedTheme === targetRef.current) return;
+
+      targetRef.current = resolvedTheme;
 
       if (options?.animated === false) {
-        setResolved({ colors: getColors(resolved), name: resolved });
-        onThemeChange?.(resolved);
+        setResolved({ colors: getColors(resolvedTheme), name: resolvedTheme });
+        try { onThemeChange?.(resolvedTheme); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
         return;
       }
 
-      configOnTransitionStart?.(resolved);
-      options?.onTransitionStart?.(resolved);
+      // Block touches and mark as transitioning BEFORE firing user callbacks to prevent
+      // re-entrant setTheme calls from starting a concurrent transition.
       transitioningRef.current = true;
       isBlocking.value = true;
 
+      try {
+        configOnTransitionStart?.(resolvedTheme);
+        options?.onTransitionStart?.(resolvedTheme);
+      } catch (e) {
+        // Reset guards so a callback error doesn't permanently block transitions.
+        resetTransition();
+        throw e;
+      }
       setIsTransitioning(true);
-      transition(resolved, options);
-    }, [isBlocking, transition]);
+      transition(resolvedTheme, options);
+    }, [isBlocking, resetTransition, transition]);
 
     const appStateRef = useRef(AppState.currentState);
 

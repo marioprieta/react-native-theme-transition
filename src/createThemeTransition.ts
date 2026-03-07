@@ -60,6 +60,12 @@ export function createThemeTransition<
     }
   }
 
+  if (config.duration != null && (typeof config.duration !== 'number' || !isFinite(config.duration) || config.duration < 0)) {
+    throw new Error(
+      '[react-native-theme-transition] `duration` must be a finite non-negative number.',
+    );
+  }
+
   if (config.systemThemeMap) {
     for (const [scheme, name] of Object.entries(config.systemThemeMap)) {
       if (!(name in config.themes)) {

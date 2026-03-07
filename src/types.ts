@@ -86,6 +86,11 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    * Fires for all animated transitions, including system-driven ones.
    * Does not fire for instant switches (`animated: false`).
    *
+   * Not called if the screenshot capture fails mid-transition, even when
+   * `onTransitionStart` has already fired. In that case the library falls back to an
+   * instant switch and only `onThemeChange` fires. Design `onTransitionStart` handlers
+   * to be resilient to a missing matching `onTransitionEnd`.
+   *
    * @param themeName - The newly active theme name.
    */
   onTransitionEnd?: (themeName: ThemeNames<T>) => void;
@@ -137,6 +142,10 @@ export interface SetThemeOptions<Names extends string = string> {
    * @remarks
    * Only called when `animated` is `true` (the default).
    * Fires after the config-level `onTransitionEnd` (if provided).
+   *
+   * Not called if the screenshot capture fails mid-transition, even when
+   * `onTransitionStart` has already fired. In that case the library falls back to an
+   * instant switch and only `onThemeChange` fires.
    *
    * @param themeName - The newly active theme name.
    */
