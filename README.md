@@ -49,16 +49,18 @@ This library takes a different approach: capture a screenshot, overlay it, switc
 ## Installation
 
 ```bash
-# Expo (recommended)
-npx expo install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
+# Expo (SDK 54+ already has reanimated and view-shot)
+npx expo install react-native-theme-transition react-native-worklets
 
 # React Native CLI
 npm install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
 ```
 
-> **Already using Expo SDK 54+?** `react-native-reanimated` is already installed. Run `npx expo install react-native-theme-transition react-native-view-shot react-native-worklets` to add the remaining packages.
+> **Expo SDK 55+:** The blank template no longer bundles `babel-preset-expo`. If your project doesn't have a `babel.config.js` yet, install it: `npx expo install babel-preset-expo`
 
-> **CLI users:** Add `react-native-worklets/plugin` as the **last plugin** in your `babel.config.js` and run `npx pod-install` for iOS.
+Add `react-native-worklets/plugin` as the **last plugin** in your `babel.config.js`. On **SDK 55+**, do **not** add `react-native-reanimated/plugin` — `babel-preset-expo` already includes it from SDK 55 onwards. On SDK 54 and below you still need it.
+
+> **CLI users:** Run `npx pod-install` for iOS after installing.
 
 ## Quick start
 

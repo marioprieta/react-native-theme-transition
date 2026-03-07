@@ -19,6 +19,8 @@ Common issues, causes, and solutions.
 13. [setTheme does nothing](#settheme-does-nothing)
 14. [Double transition on app start](#double-transition-on-app-start)
 15. [Android: capture returns blank or wrong content](#android-capture-returns-blank-or-wrong-content)
+16. [Duplicate plugin/preset detected (babel error)](#duplicate-pluginpreset-detected-babel-error)
+17. [Cannot find module 'babel-preset-expo'](#cannot-find-module-babel-preset-expo)
 
 ---
 
@@ -64,6 +66,44 @@ cross-fade.
 **Fix:** Verify the provider wraps everything (above navigation), all peer
 dependencies are installed, and babel is configured correctly. Restart with
 cache clear: `npx expo start -c`.
+
+---
+
+## Duplicate plugin/preset detected (babel error)
+
+**Symptom:** `SyntaxError: index.ts: Duplicate plugin/preset detected.`
+
+**Cause:** Starting from **Expo SDK 55**, `babel-preset-expo` already includes
+`react-native-reanimated/plugin` internally. Adding it again in your
+`babel.config.js` plugins array causes the duplicate error. This only affects
+SDK 55+ — on SDK 54 and below you still need to add it manually.
+
+**Fix:** On SDK 55+, remove `'react-native-reanimated/plugin'` from your plugins —
+only keep `'react-native-worklets/plugin'`:
+
+```js
+plugins: [
+  // SDK 55+: babel-preset-expo already includes reanimated/plugin
+  // SDK 54 and below: add 'react-native-reanimated/plugin' here
+  'react-native-worklets/plugin', // must be last
+],
+```
+
+---
+
+## Cannot find module 'babel-preset-expo'
+
+**Symptom:** `SyntaxError: index.ts: Cannot find module 'babel-preset-expo'`
+
+**Cause:** Expo SDK 55 blank templates no longer include `babel-preset-expo` as a
+dependency. If you create a `babel.config.js` referencing it, the bundler can't
+resolve it.
+
+**Fix:** Install it explicitly:
+
+```bash
+npx expo install babel-preset-expo
+```
 
 ---
 

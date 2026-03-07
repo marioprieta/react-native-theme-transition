@@ -20,10 +20,10 @@ Expo Go compatible, 100% JS, powered by Reanimated.
 2. Wait 1 frame for pending React state to flush
 3. Capture full-screen screenshot via `react-native-view-shot`
 4. Mount screenshot as opaque overlay
-5. Wait 1 frame for the overlay to paint on the native UI thread
-6. Switch color tokens underneath
-7. Wait 3 frames for native UI thread to repaint with new colors
-8. Fade overlay out on the UI thread via Reanimated
+5. `Image.onLoad` confirms the bitmap is decoded (event-based)
+6. Wait 1 frame for the compositor to paint the overlay on screen
+7. Switch color tokens underneath
+8. Fade overlay out immediately on the UI thread via Reanimated
 9. Remove overlay, unblock touches, fire completion callbacks
 
 The screenshot is captured BEFORE the color switch — the overlay is identical to
@@ -88,20 +88,23 @@ These are the non-negotiable constraints to always keep in mind:
 
 7. **Peer dependencies.** `react-native-reanimated >= 4.0.0`,
    `react-native-view-shot >= 3.0.0`, `react-native-worklets >= 0.5.0`.
-   Expo SDK 54+ includes reanimated by default; view-shot and worklets need installing.
+   Expo SDK 54+ includes reanimated and view-shot; only worklets needs installing.
 
 ## Peer dependency setup
 
 ```bash
-# Expo (SDK 54+ already has reanimated)
-npx expo install react-native-theme-transition react-native-view-shot react-native-worklets
+# Expo (SDK 54+ already has reanimated and view-shot)
+npx expo install react-native-theme-transition react-native-worklets
 
-# Expo (explicit — installs all peer deps)
-npx expo install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
+# Expo SDK 55+ — the template no longer bundles babel-preset-expo, install it:
+npx expo install babel-preset-expo
 
 # React Native CLI
 npm install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
 cd ios && pod install
 ```
 
-CLI users: add `react-native-worklets/plugin` as the **last plugin** in `babel.config.js`.
+**All users** (Expo and CLI): add `react-native-worklets/plugin` as the **last plugin**
+in `babel.config.js`. On **SDK 55+**, do NOT add `react-native-reanimated/plugin` —
+`babel-preset-expo` already includes it from SDK 55 onwards and duplicating it causes
+a `Duplicate plugin/preset detected` build error. On SDK 54 and below you still need it.

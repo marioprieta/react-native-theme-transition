@@ -38,9 +38,8 @@ const ROOT_STYLE = { flex: 1 } as const;
  * 3. **Native UI thread** — platform views are painted on screen.
  *
  * Each phase runs on its own frame cadence (~16.67 ms at 60 fps).
- * Waiting 1 frame lets React flush pending state; waiting 3 frames
- * gives the shadow tree and native UI thread time to repaint, even on
- * slower devices or complex layouts.
+ * Waiting 1 frame lets React flush pending state or the compositor
+ * paint a decoded image.
  *
  * @param n - Number of animation frames to wait.
  */
@@ -120,7 +119,6 @@ export function createProviderAndContext<
     children: React.ReactNode;
     initialTheme: Names | 'system';
   }) {
-    // Initialization runs only once (lazy useState), keeping every subsequent render clean.
     const [resolved, setResolved] = useState<{ colors: Record<Tokens, string>; name: Names }>(() => {
       const isInitialSystem = initialTheme === 'system';
       const startScheme = getScheme(Appearance.getColorScheme());
@@ -146,7 +144,6 @@ export function createProviderAndContext<
     const mountedRef = useRef(true);
     const [isTransitioning, setIsTransitioning] = useState(false);
 
-    // Tracks whether the provider is in system-following mode.
     const systemModeRef = useRef(initialTheme === 'system');
 
     // Blocks touches within one native frame, without waiting for a React re-render.
@@ -159,6 +156,8 @@ export function createProviderAndContext<
     const [overlayUri, setOverlayUri] = useState<string | null>(null);
     const overlayOpacity = useSharedValue(0);
     const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.get() }));
+    // Resolved when the overlay Image fires onLoad, confirming the bitmap is decoded.
+    const overlayReadyRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
       mountedRef.current = true;
@@ -184,19 +183,19 @@ export function createProviderAndContext<
         if (!mountedRef.current) return;
 
         overlayOpacity.set(1);
-        setOverlayUri(uri);
 
-        // Separate React commits: the overlay must mount and paint before the
-        // color switch. Without this yield, both state updates batch into one
-        // commit and Android can paint the new colors before the overlay is visible.
+        // Wait for the overlay Image to confirm the bitmap is decoded via onLoad.
+        await new Promise<void>((resolve) => {
+          overlayReadyRef.current = resolve;
+          setOverlayUri(uri);
+        });
+        if (!mountedRef.current) return;
+
+        // One extra frame for the composited overlay to actually paint on screen.
         await waitFrames(1);
         if (!mountedRef.current) return;
 
         setResolved({ colors: getColors(name), name });
-
-        // Wait for the native UI thread to repaint the new theme beneath the overlay.
-        await waitFrames(3);
-        if (!mountedRef.current) return;
 
         const finishTransition = () => {
           if (!mountedRef.current) return;
@@ -310,7 +309,7 @@ export function createProviderAndContext<
           <Animated.View style={FILL} animatedProps={blockerProps} />
           {overlayUri != null ? (
             <Animated.View style={[FILL, overlayStyle]} pointerEvents="none">
-              <Image source={{ uri: overlayUri }} style={FILL} resizeMode="cover" fadeDuration={0} />
+              <Image source={{ uri: overlayUri }} style={FILL} resizeMode="cover" fadeDuration={0} onLoad={() => overlayReadyRef.current?.()} onError={() => overlayReadyRef.current?.()} />
             </Animated.View>
           ) : null}
         </View>

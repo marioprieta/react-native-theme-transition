@@ -18,10 +18,14 @@ Step-by-step guide to add react-native-theme-transition to a fresh project.
 ### 1. Install dependencies
 
 ```bash
-# Expo SDK 54+ (reanimated is already installed)
-npx expo install react-native-theme-transition react-native-view-shot react-native-worklets
+# Expo SDK 54+ (reanimated and view-shot are already included)
+npx expo install react-native-theme-transition react-native-worklets
 
-# Expo SDK < 54 or explicit
+# Expo SDK 55+ — babel-preset-expo is no longer bundled with the template,
+# so install it if your project doesn't have a babel.config.js yet:
+npx expo install babel-preset-expo
+
+# Expo SDK < 54
 npx expo install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
 ```
 
@@ -35,7 +39,9 @@ module.exports = function (api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      // ... other plugins
+      // SDK 55+: do NOT add 'react-native-reanimated/plugin' —
+      // babel-preset-expo already includes it from SDK 55 onwards.
+      // SDK 54 and below: you DO need 'react-native-reanimated/plugin' here.
       'react-native-worklets/plugin', // must be last
     ],
   };

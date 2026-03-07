@@ -235,10 +235,10 @@ Calling `setTheme('dark')` (or any explicit name) exits system mode.
 3. Per-call onTransitionStart(name)
 4. Screenshot captured
 5. Overlay mounted
-6. Overlay paints (1 frame)
-7. Colors switched underneath
-8. Native repaint (3 frames)
-9. Fade animation (duration ms)
+6. Image onLoad (bitmap decoded)
+7. Overlay paints (1 frame)
+8. Colors switched underneath
+9. Fade animation starts immediately (duration ms)
 10. Transition guards reset, touch unblocked
 11. Config onTransitionEnd(name)
 12. Per-call onTransitionEnd(name)
