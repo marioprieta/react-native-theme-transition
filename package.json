@@ -30,7 +30,7 @@
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "tsc",
-    "release": "npm publish --provenance --access public"
+    "release": "npm publish --provenance --access public --dry-run"
   },
   "keywords": [
     "react-native",
