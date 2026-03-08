@@ -1,0 +1,140 @@
+---
+title: Migration Guide
+description: Migrate from plain Context, Zustand, Redux, MMKV, or React Navigation theming.
+---
+
+The migration follows the same pattern regardless of your current approach:
+
+<Steps>
+  <Step>**Install** the library and peer dependencies</Step>
+  <Step>**Create the theme file** — define tokens, call `createThemeTransition`</Step>
+  <Step>**Wrap with provider** — add `ThemeTransitionProvider` at the root</Step>
+  <Step>**Bridge** your existing state to the provider via a bridge component</Step>
+  <Step>**Replace** color references from your old system to `useTheme().colors`</Step>
+  <Step>**Remove** the old theme context/provider once fully migrated</Step>
+</Steps>
+
+## From plain Context / useState
+
+This is the simplest migration — fully replace the old context.
+
+### Before
+
+```tsx
+const ThemeContext = createContext({
+  theme: 'light', colors: lightColors, toggle: () => {},
+});
+
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState('light');
+  const colors = theme === 'light' ? lightColors : darkColors;
+  return (
+    <ThemeContext.Provider value={{ theme, colors, toggle: () => setTheme(t => t === 'light' ? 'dark' : 'light') }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+```
+
+### After
+
+```ts title="src/lib/theme.ts"
+import { createThemeTransition } from 'react-native-theme-transition';
+
+export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
+  themes: { light: lightColors, dark: darkColors },
+});
+```
+
+```tsx
+// Before:
+const { colors, toggle } = useContext(ThemeContext);
+
+// After:
+const { colors, name, setTheme } = useTheme();
+const toggle = () => setTheme(name === 'light' ? 'dark' : 'light');
+```
+
+## From React Navigation theming only
+
+If your only theme system is `NavigationContainer`'s `theme` prop:
+
+```ts title="src/lib/theme.ts"
+const light = {
+  primary: '#007AFF', background: '#ffffff', card: '#ffffff',
+  text: '#000000', border: '#d8d8d8', notification: '#ff3b30',
+};
+
+const dark: Record<keyof typeof light, string> = {
+  primary: '#0A84FF', background: '#000000', card: '#1c1c1e',
+  text: '#ffffff', border: '#333333', notification: '#ff453a',
+};
+
+export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
+  themes: { light, dark },
+});
+```
+
+Bridge to NavigationContainer:
+
+<Callout type="info">
+  This example uses `name === 'dark'` for simplicity. If your app has custom
+  dark-ish themes, define a set and check membership instead:
+  `const DARK_THEMES = new Set(['dark', 'midnight']); dark: DARK_THEMES.has(name)`.
+</Callout>
+
+```tsx
+function AppWithNavigation() {
+  const { colors, name } = useTheme();
+
+  return (
+    <NavigationContainer theme={{
+      dark: name === 'dark',
+      colors: {
+        primary: colors.primary, background: colors.background,
+        card: colors.card, text: colors.text,
+        border: colors.border, notification: colors.notification,
+      },
+    }}>
+      <AppNavigator />
+    </NavigationContainer>
+  );
+}
+
+// Root:
+<ThemeTransitionProvider initialTheme="system">
+  <AppWithNavigation />
+</ThemeTransitionProvider>
+```
+
+## Preserving an existing useTheme hook
+
+If your codebase already has a `useTheme` hook with a different return shape:
+
+<Callout type="info">
+  The adapter below maps `isDark` from `name === 'dark'` because the migration
+  example assumes `light` and `dark`. For custom theme names, replace that check
+  with your own dark-theme set.
+</Callout>
+
+```ts title="src/lib/theme.ts"
+const api = createThemeTransition({ themes: { light, dark } });
+
+export const ThemeTransitionProvider = api.ThemeTransitionProvider;
+
+// Adapter: match your old hook's return shape
+export function useTheme() {
+  const { colors, name, setTheme, isTransitioning } = api.useTheme();
+  return {
+    colors,
+    theme: name,         // your old code used 'theme' not 'name'
+    isDark: name === 'dark',
+    toggle: () => setTheme(name === 'light' ? 'dark' : 'light'),
+    setTheme,
+    isTransitioning,
+  };
+}
+```
+
+This lets you migrate incrementally — old components keep working while you
+update them one by one.
