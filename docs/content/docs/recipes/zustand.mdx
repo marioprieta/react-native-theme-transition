@@ -1,0 +1,173 @@
+---
+title: State Managers
+description: Bridge pattern for Zustand, Redux, and MMKV.
+---
+
+The library owns animated transition state internally. External state managers
+drive it via `setTheme` calls from a **bridge component**.
+
+## The bridge pattern
+
+```tsx
+import { useEffect } from 'react';
+import { useTheme } from '@/lib/theme';
+
+function ThemeBridge() {
+  const externalTheme = /* read from your state manager */;
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme(externalTheme);
+  }, [externalTheme, setTheme]);
+
+  return null;
+}
+```
+
+Place inside `ThemeTransitionProvider`, before other children.
+
+## Zustand
+
+### Store
+
+```ts title="stores/theme-store.ts"
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+interface ThemeState {
+  themePreference: ThemePreference;
+  setThemePreference: (pref: ThemePreference) => void;
+}
+
+export const useThemeStore = create<ThemeState>()(
+  persist(
+    (set) => ({
+      themePreference: 'system',
+      setThemePreference: (pref) => set({ themePreference: pref }),
+    }),
+    {
+      name: 'theme-store',
+      storage: createJSONStorage(() => AsyncStorage),
+    },
+  ),
+);
+```
+
+### Root layout
+
+```tsx title="app/_layout.tsx"
+import { useEffect } from 'react';
+import { ThemeTransitionProvider, useTheme } from '@/lib/theme';
+import { useThemeStore } from '@/stores/theme-store';
+
+export default function RootLayout() {
+  const themePreference = useThemeStore((s) => s.themePreference);
+
+  return (
+    <ThemeTransitionProvider initialTheme={themePreference}>
+      <ThemeBridge />
+      <App />
+    </ThemeTransitionProvider>
+  );
+}
+
+function ThemeBridge() {
+  const themePreference = useThemeStore((s) => s.themePreference);
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme(themePreference);
+  }, [themePreference, setTheme]);
+
+  return null;
+}
+```
+
+<Callout type="info">
+  Native UI elements (alerts, date pickers, keyboards) are automatically kept in
+  sync by the library via `Appearance.setColorScheme`. No manual calls needed —
+  just configure `darkThemes` in `createThemeTransition` if you have custom dark themes.
+</Callout>
+
+### Settings screen
+
+```tsx
+import { Button } from 'react-native';
+import { useThemeStore } from '@/stores/theme-store';
+
+function ThemeSettings() {
+  const setThemePreference = useThemeStore((s) => s.setThemePreference);
+
+  // Change Zustand → bridge fires → animated transition
+  return (
+    <>
+      <Button title="Light"  onPress={() => setThemePreference('light')} />
+      <Button title="Dark"   onPress={() => setThemePreference('dark')} />
+      <Button title="System" onPress={() => setThemePreference('system')} />
+    </>
+  );
+}
+```
+
+## Redux / Redux Toolkit
+
+Same bridge pattern, different selector:
+
+```tsx
+import { useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { useTheme } from '@/lib/theme';
+
+function ThemeBridge() {
+  const themePreference = useSelector((state: RootState) => state.theme.themePreference);
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme(themePreference);
+  }, [themePreference, setTheme]);
+
+  return null;
+}
+```
+
+Redux Provider must wrap `ThemeTransitionProvider`:
+
+```tsx
+<Provider store={store}>
+  <ThemeTransitionProvider initialTheme={store.getState().theme.themePreference}>
+    <ThemeBridge />
+    <App />
+  </ThemeTransitionProvider>
+</Provider>
+```
+
+## MMKV
+
+```ts title="hooks/useStoredTheme.ts"
+import { useMMKVString } from 'react-native-mmkv';
+
+export function useStoredTheme() {
+  const [value, setValue] = useMMKVString('themePreference');
+  const themePreference = (value ?? 'system') as 'system' | 'light' | 'dark';
+  return { themePreference, setThemePreference: setValue };
+}
+```
+
+```tsx
+import { useEffect } from 'react';
+import { useTheme } from '@/lib/theme';
+
+function ThemeBridge() {
+  const { themePreference } = useStoredTheme();
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme(themePreference);
+  }, [themePreference, setTheme]);
+
+  return null;
+}
+```

@@ -1,0 +1,12 @@
+{
+  "title": "Examples",
+
+  "pages": [
+    "theme-picker",
+    "theme-toggle",
+    "checkmark-list",
+    "theme-button",
+    "react-navigation",
+    "system-theme"
+  ]
+}
