@@ -1,0 +1,77 @@
+---
+title: System Theme
+description: Follow OS appearance automatically with zero-flash startup.
+---
+
+## Basic setup
+
+Pass `initialTheme="system"` to follow OS appearance from the first frame:
+
+```tsx
+<ThemeTransitionProvider initialTheme="system">
+  <App />
+</ThemeTransitionProvider>
+```
+
+With custom theme names, add `systemThemeMap`:
+
+```ts
+export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
+  themes: { sunrise, midnight },
+  systemThemeMap: { light: 'sunrise', dark: 'midnight' },
+});
+```
+
+## Entering and exiting system mode
+
+```tsx
+setTheme('system');  // enter — subscribes to OS changes
+setTheme('dark');    // exit — manual mode, ignores OS
+```
+
+## What happens under the hood
+
+- **Foreground**: OS appearance change triggers an animated transition
+- **Background**: OS appearance change triggers an instant switch (no visible animation)
+- **Returning to foreground**: re-reads OS scheme with instant switch
+
+## StatusBar sync
+
+The library doesn't manage StatusBar. Sync it manually:
+
+<Callout type="info">
+  These examples use `name === 'dark'` for simplicity. If your app has custom
+  dark-ish themes, replace that check with a set membership test.
+</Callout>
+
+```tsx
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/lib/theme';
+
+function StatusBarSync() {
+  const { name } = useTheme();
+  return <StatusBar style={name === 'dark' ? 'light' : 'dark'} />;
+}
+```
+
+### Native UI elements (alerts, date pickers)
+
+The library automatically calls `Appearance.setColorScheme` to keep native UI
+elements (alerts, date pickers, keyboards) in sync with the active theme.
+No manual setup is required.
+
+In **manual mode**, the library sets `'dark'` or `'light'` based on the `darkThemes`
+config. In **system mode**, it sets `'unspecified'` so the OS drives native appearance.
+
+```ts
+createThemeTransition({
+  themes: { light, dark, ocean },
+  darkThemes: ['dark', 'ocean'], // these get Appearance.setColorScheme('dark')
+});
+```
+
+<Callout type="warn">
+  Do **not** call `Appearance.setColorScheme` yourself — the library manages it
+  internally. Calling it manually can corrupt `getColorScheme()` on Android and
+  break system-following mode.
+</Callout>
