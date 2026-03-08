@@ -1,0 +1,67 @@
+---
+title: Callback Ordering
+description: Exact sequence of callbacks for animated transitions, instant switches, and edge cases.
+---
+
+## Animated transition
+
+```
+1.  Touch blocking starts (shared value, instant)
+2.  Config onTransitionStart(name)
+3.  Per-call onTransitionStart(name)
+4.  Screenshot captured
+5.  Overlay mounted
+6.  Image onLoad (bitmap decoded)
+7.  Overlay paints (1 frame)
+8.  Colors switched underneath
+9.  React commits new theme (1 frame)
+10. Fade animation starts (duration ms)
+11. Transition guards reset, touch unblocked
+12. Config onTransitionEnd(name)
+13. Per-call onTransitionEnd(name)
+14. Config onThemeChange(name)
+15. Next render: isTransitioning → false, overlay unmounted
+```
+
+## Instant switch (`animated: false`)
+
+```
+1. Colors switched immediately
+2. Config onThemeChange(name)
+```
+
+No `onTransitionStart`, no `onTransitionEnd`, no touch blocking, no screenshot.
+
+## Capture failure during animated transition
+
+```
+1. Touch blocking starts              ← already active
+2. Config onTransitionStart(name)     ← already fired
+3. Per-call onTransitionStart(name)   ← already fired
+4. Screenshot FAILS
+5. Colors switched immediately (fallback)
+6. Touch blocking ends
+7. Config onThemeChange(name)
+```
+
+<Callout type="warn">
+  `onTransitionEnd` does **not** fire on capture failure. Design `onTransitionStart`
+  handlers to be resilient to a missing matching `onTransitionEnd`.
+</Callout>
+
+## System-driven change
+
+OS appearance changes use the same paths above:
+
+- **In foreground**: animated transition (full sequence)
+- **In background or returning to foreground**: instant switch (`animated: false`)
+
+## Summary
+
+| Callback | Animated | Instant | Capture failure |
+|---|:---:|:---:|:---:|
+| `onTransitionStart` (config) | Yes | No | Yes (already fired) |
+| `onTransitionStart` (per-call) | Yes | No | Yes (already fired) |
+| `onTransitionEnd` (config) | Yes | No | **No** |
+| `onTransitionEnd` (per-call) | Yes | No | **No** |
+| `onThemeChange` (config) | Yes | Yes | Yes |

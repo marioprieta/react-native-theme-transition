@@ -1,0 +1,78 @@
+---
+title: Expo Router
+description: Full Expo Router setup with typed navigation colors and StatusBar sync.
+---
+
+## Root layout
+
+```tsx title="app/_layout.tsx"
+import { ThemeTransitionProvider, useTheme } from '@/lib/theme';
+import { ThemeProvider } from '@react-navigation/native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+function InnerLayout() {
+  const { colors, name } = useTheme();
+
+  return (
+    <ThemeProvider value={{
+      dark: name === 'dark',
+      colors: {
+        primary: colors.primary,
+        background: colors.background,
+        card: colors.card,
+        text: colors.text,
+        border: colors.border,
+        notification: colors.primary,
+      },
+    }}>
+      <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeTransitionProvider initialTheme="system">
+        <InnerLayout />
+      </ThemeTransitionProvider>
+    </GestureHandlerRootView>
+  );
+}
+```
+
+<Callout type="info">
+  This example uses `name === 'dark'` for simplicity. If your app has
+  custom dark-ish themes (e.g. `'ocean'`, `'midnight'`), define a set
+  and check membership: `const DARK_THEMES = new Set(['dark', 'ocean']); dark: DARK_THEMES.has(name)`.
+</Callout>
+
+## Key points
+
+- `ThemeTransitionProvider` inside `GestureHandlerRootView` but wrapping all navigation
+- `InnerLayout` must be inside the provider (it uses `useTheme`)
+- `initialTheme="system"` for OS-following by default
+- `ThemeProvider` from `@react-navigation/native` feeds typed colors to navigation headers, tab bars, etc.
+
+## Bottom sheets and modals
+
+Bottom sheets must be inside the provider:
+
+```tsx
+<ThemeTransitionProvider initialTheme="system">
+  <BottomSheetModalProvider>
+    <App />
+  </BottomSheetModalProvider>
+</ThemeTransitionProvider>
+```
+
+<Callout type="warn">
+  React Native's built-in `Modal` renders in a separate native window — it won't
+  be captured in the screenshot. Theme changes while a modal is open will show
+  the transition on the background only.
+</Callout>
