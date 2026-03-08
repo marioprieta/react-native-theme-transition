@@ -60,12 +60,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/marioprieta/react-native-theme-transition"
+    "url": "git+https://github.com/marioprieta/react-native-theme-transition.git"
   },
   "bugs": {
     "url": "https://github.com/marioprieta/react-native-theme-transition/issues"
   },
-  "homepage": "https://github.com/marioprieta/react-native-theme-transition#readme",
+  "homepage": "https://react-native-theme-transition.vercel.app",
   "author": "Mario Prieta",
   "peerDependencies": {
     "react": ">=18.0.0",
