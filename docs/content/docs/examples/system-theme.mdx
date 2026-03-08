@@ -39,6 +39,11 @@ setTheme('dark');    // exit — manual mode, ignores OS
 
 The library doesn't manage StatusBar. Sync it manually:
 
+<Callout type="info">
+  These examples use `name === 'dark'` for simplicity. If your app has custom
+  dark-ish themes, replace that check with a set membership test.
+</Callout>
+
 ```tsx
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/lib/theme';

@@ -18,6 +18,7 @@ import type {
 } from './types';
 import { createProviderAndContext } from './transitionEngine';
 import { createUseTheme } from './hooks/useTheme';
+import { TAG } from './constants';
 
 /**
  * Creates a fully typed theme transition system.
@@ -39,12 +40,12 @@ export function createThemeTransition<
   const themeNames = Object.keys(config.themes) as ThemeNames<T>[];
 
   if (themeNames.length === 0) {
-    throw new Error('[react-native-theme-transition] `themes` must contain at least one theme.');
+    throw new Error(`${TAG} \`themes\` must contain at least one theme.`);
   }
 
   if ('system' in config.themes) {
     throw new Error(
-      '[react-native-theme-transition] `"system"` is a reserved name and cannot be used as a theme key. Rename the theme and use `systemThemeMap` to map OS appearance to it.',
+      `${TAG} \`"system"\` is a reserved name and cannot be used as a theme key. Rename the theme and use \`systemThemeMap\` to map OS appearance to it.`,
     );
   }
 
@@ -55,28 +56,28 @@ export function createThemeTransition<
     const keys = Object.keys(config.themes[name]).sort();
     if (keys.length !== referenceKeys.length || keys.some((k, i) => k !== referenceKeys[i])) {
       throw new Error(
-        `[react-native-theme-transition] Theme "${name}" has different token keys than "${referenceTheme}". All themes must share identical keys.`,
+        `${TAG} Theme "${name}" has different token keys than "${referenceTheme}". All themes must share identical keys.`,
       );
     }
   }
 
   if (config.duration != null && (typeof config.duration !== 'number' || !isFinite(config.duration) || config.duration < 0)) {
     throw new Error(
-      '[react-native-theme-transition] `duration` must be a finite non-negative number.',
+      `${TAG} \`duration\` must be a finite non-negative number.`,
     );
   }
 
   if (config.systemThemeMap) {
     if (!('light' in config.systemThemeMap) || !('dark' in config.systemThemeMap)) {
       throw new Error(
-        '[react-native-theme-transition] `systemThemeMap` must provide both `light` and `dark` keys.',
+        `${TAG} \`systemThemeMap\` must provide both \`light\` and \`dark\` keys.`,
       );
     }
 
     for (const [scheme, name] of Object.entries(config.systemThemeMap)) {
       if (!(name in config.themes)) {
         throw new Error(
-          `[react-native-theme-transition] \`systemThemeMap.${scheme}\` maps to "${name}" which does not exist in themes.`,
+          `${TAG} \`systemThemeMap.${scheme}\` maps to "${name}" which does not exist in themes.`,
         );
       }
     }

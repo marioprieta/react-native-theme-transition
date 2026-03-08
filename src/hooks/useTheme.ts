@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Context } from 'react';
 import type {
   UseThemeResult,
@@ -7,6 +7,7 @@ import type {
   ThemeNames,
   TokenNames,
 } from '../types';
+import { TAG } from '../constants';
 
 /**
  * Factory that produces the `useTheme` hook bound to a specific context.
@@ -27,7 +28,7 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
     const ctx = useContext(Ctx);
     if (!ctx) {
       throw new Error(
-        '[react-native-theme-transition] `useTheme` must be used inside a `ThemeTransitionProvider`.',
+        `${TAG} \`useTheme\` must be used inside a \`ThemeTransitionProvider\`.`,
       );
     }
 
@@ -66,8 +67,16 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
       [setTheme],
     );
 
+    // Memoize the extended result so consumers using selection tracking
+    // don't get a new object reference on every render (which would defeat
+    // the context-level useMemo in the provider).
+    const selectionResult = useMemo(
+      () => ({ ...ctx, selected, select }),
+      [ctx, selected, select],
+    );
+
     if (options != null) {
-      return { ...ctx, selected, select };
+      return selectionResult;
     }
     return ctx;
   }

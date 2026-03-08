@@ -77,6 +77,12 @@ export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
 
 Bridge to NavigationContainer:
 
+<Callout type="info">
+  This example uses `name === 'dark'` for simplicity. If your app has custom
+  dark-ish themes, define a set and check membership instead:
+  `const DARK_THEMES = new Set(['dark', 'midnight']); dark: DARK_THEMES.has(name)`.
+</Callout>
+
 ```tsx
 function AppWithNavigation() {
   const { colors, name } = useTheme();
@@ -104,6 +110,12 @@ function AppWithNavigation() {
 ## Preserving an existing useTheme hook
 
 If your codebase already has a `useTheme` hook with a different return shape:
+
+<Callout type="info">
+  The adapter below maps `isDark` from `name === 'dark'` because the migration
+  example assumes `light` and `dark`. For custom theme names, replace that check
+  with your own dark-theme set.
+</Callout>
 
 ```ts title="src/lib/theme.ts"
 const api = createThemeTransition({ themes: { light, dark } });

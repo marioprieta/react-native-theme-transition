@@ -141,6 +141,8 @@ const dark: Record<keyof typeof light, string> = { bg: '#000', text: '#fff' };
 **Fix:** Pass the stored preference as `initialTheme`:
 
 ```tsx
+import { useThemeStore } from '@/stores/theme-store';
+
 const colorMode = useThemeStore((s) => s.colorMode);
 <ThemeTransitionProvider initialTheme={colorMode}>
 ```

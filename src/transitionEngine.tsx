@@ -22,10 +22,15 @@ import type {
   ThemeNames,
   TokenNames,
 } from './types';
-
+import { TAG } from './constants';
 const ABSOLUTE_FILL = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const;
 // Avoids layout clipping on certain Android API levels.
 const ROOT_STYLE = { flex: 1 } as const;
+
+/** Calls `fn` and swallows errors with a console.warn tagged by `label`. */
+function safeCall<A extends unknown[]>(label: string, fn: ((...args: A) => void) | undefined, ...args: A): void {
+  try { fn?.(...args); } catch (e) { console.warn(`${TAG} ${label} threw:`, e); }
+}
 
 /**
  * Waits for `n` native animation frames to complete.
@@ -88,6 +93,15 @@ function mapSchemeToTheme<Names extends string>(
 }
 
 /**
+ * Reads the current OS appearance and maps it to a theme name.
+ *
+ * @internal Convenience wrapper combining {@link normalizeScheme} and {@link mapSchemeToTheme}.
+ */
+function resolveSystemTheme<Names extends string>(mapping?: SystemThemeMap<Names>): Names {
+  return mapSchemeToTheme<Names>(normalizeScheme(Appearance.getColorScheme()), mapping);
+}
+
+/**
  * Creates the React Context and provider component for a given theme configuration.
  *
  * @internal Used by {@link createThemeTransition}; not part of the public API.
@@ -120,14 +134,13 @@ export function createProviderAndContext<
   }) {
     const [activeTheme, setActiveTheme] = useState<{ colors: Record<Tokens, string>; name: Names }>(() => {
       const isInitialSystem = initialTheme === 'system';
-      const startScheme = normalizeScheme(Appearance.getColorScheme());
       const startTheme = isInitialSystem
-        ? mapSchemeToTheme<Names>(startScheme, systemThemeMap)
+        ? resolveSystemTheme<Names>(systemThemeMap)
         : initialTheme;
 
       if (!(startTheme in themes)) {
         throw new Error(
-          `[react-native-theme-transition] initialTheme resolved to "${startTheme}" which does not exist in themes.${
+          `${TAG} initialTheme resolved to "${startTheme}" which does not exist in themes.${
             isInitialSystem ? ' Provide `systemThemeMap` in the config to map OS appearance to your theme names.' : ''
           }`,
         );
@@ -215,18 +228,18 @@ export function createProviderAndContext<
         const finishTransition = () => {
           if (!mountedRef.current) return;
           resetTransition();
-          try { configOnTransitionEnd?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onTransitionEnd threw:', e); }
-          try { options?.onTransitionEnd?.(name); } catch (e) { console.warn('[react-native-theme-transition] per-call onTransitionEnd threw:', e); }
-          try { onThemeChange?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
+          safeCall('config onTransitionEnd', configOnTransitionEnd, name);
+          safeCall('per-call onTransitionEnd', options?.onTransitionEnd, name);
+          safeCall('config onThemeChange', onThemeChange, name);
 
           // Reconcile: if the OS appearance changed while the transition was
           // running and we're in system mode, apply the missed change instantly.
           if (systemModeRef.current) {
-            const current = mapSchemeToTheme<Names>(normalizeScheme(Appearance.getColorScheme()), systemThemeMap);
+            const current = resolveSystemTheme<Names>(systemThemeMap);
             if (current !== name) {
               targetThemeRef.current = current;
               setActiveTheme({ colors: getColors(current), name: current });
-              try { onThemeChange?.(current); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
+              safeCall('config onThemeChange', onThemeChange, current);
             }
           }
         };
@@ -238,19 +251,20 @@ export function createProviderAndContext<
       } catch (error) {
         // If capture fails, apply theme instantly — no animation beats a stuck overlay.
         console.warn(
-          '[react-native-theme-transition] Failed to capture screenshot. Falling back to instant theme switch.',
+          `${TAG} Failed to capture screenshot. Falling back to instant theme switch.`,
           error,
         );
         if (!mountedRef.current) return;
         setActiveTheme({ colors: getColors(name), name });
+        overlayOpacity.set(0);
         resetTransition();
-        try { onThemeChange?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
+        safeCall('config onThemeChange', onThemeChange, name);
       }
     }, [overlayOpacity, resetTransition]);
 
     const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions<Names>): boolean => {
       const resolvedTheme = name === 'system'
-        ? mapSchemeToTheme<Names>(normalizeScheme(Appearance.getColorScheme()), systemThemeMap)
+        ? resolveSystemTheme<Names>(systemThemeMap)
         : name;
 
       if (!(resolvedTheme in themes)) {
@@ -258,7 +272,7 @@ export function createProviderAndContext<
           ? ' Provide `systemThemeMap` in the config to map OS appearance to your theme names.'
           : '';
         throw new Error(
-          `[react-native-theme-transition] setTheme("${name}") resolved to "${resolvedTheme}" which does not exist in themes.${resolutionHint}`,
+          `${TAG} setTheme("${name}") resolved to "${resolvedTheme}" which does not exist in themes.${resolutionHint}`,
         );
       }
 
@@ -274,7 +288,7 @@ export function createProviderAndContext<
 
       if (options?.animated === false) {
         setActiveTheme({ colors: getColors(resolvedTheme), name: resolvedTheme });
-        try { onThemeChange?.(resolvedTheme); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
+        safeCall('config onThemeChange', onThemeChange, resolvedTheme);
         return true;
       }
 
