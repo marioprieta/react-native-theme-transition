@@ -1,0 +1,43 @@
+---
+title: Overview
+description: Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS, powered by Reanimated.
+---
+
+Theme transitions in React Native have always needed custom native modules. That means no Expo Go, no OTA updates, and extra maintenance for each platform.
+
+This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a smooth cross-fade that works everywhere, no native code needed. All peer dependencies ship with Expo Go (SDK 54+) — only `react-native-worklets` needs to be installed separately.
+
+## Features
+
+- **Smooth cross-fade transitions.** Screenshot-overlay technique powered by Reanimated on the native UI thread, matching your display's refresh rate (60–120 FPS).
+- **Expo Go compatible.** No native code, no prebuilds.
+- **Built-in theme management.** Provider, typed hooks, and deep generic inference out of the box.
+- **System theme sync.** Follows OS appearance automatically with zero-flash startup and runtime switching.
+- **Transition guard.** Blocks concurrent transitions and exposes `isTransitioning`.
+- **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules).
+- **Tiny footprint.** ~13 kB runtime, zero runtime dependencies.
+
+## Comparison
+
+| Feature | react-native-theme-transition | react-native-theme-switch-animation | Uniwind Pro | Unistyles 3 |
+|---|:---:|:---:|:---:|:---:|
+| Animated transition | Cross-fade | Fade/circular reveal | Native snapshot | None (instant) |
+| Expo Go support | Yes | No (prebuild) | No (prebuild) | No (prebuild) |
+| Execution | Pure JS / Reanimated + Worklets | Native modules | C++ engine | C++ (ShadowTree) |
+| Theme state management | Provider + typed hooks | Bring your own | Built-in | Built-in |
+| TypeScript generics | Deep inference | Basic | Auto-generated | Manual override |
+| System theme listener | Built-in | Not included | Built-in | Adaptive themes |
+| Price | Free (MIT) | Free (MIT) | $99/seat/year | Free (MIT) |
+
+## Trade-offs
+
+- **No interaction during transitions.** Touches, scrolls, and additional `setTheme` calls are blocked while the fade is running. Use `isTransitioning` to disable buttons.
+- **Static overlay.** The transition uses a screenshot, so dynamic content (videos, animations, live counters) will appear frozen during the fade.
+
+## Requirements
+
+- React >= 18.0.0
+- React Native >= 0.76
+- react-native-reanimated >= 4.0.0
+- react-native-view-shot >= 3.0.0
+- react-native-worklets >= 0.5.0

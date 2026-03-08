@@ -1,0 +1,86 @@
+---
+title: React Navigation
+description: Sync theme colors with React Navigation and Expo Router.
+---
+
+## React Navigation
+
+Map your color tokens to React Navigation's theme shape:
+
+```tsx
+import { useMemo } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { useTheme } from '@/lib/theme';
+
+function ThemedNavigation({ children }) {
+  const { colors, name } = useTheme();
+
+  const navTheme = useMemo(() => ({
+    dark: name === 'dark',
+    colors: {
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.card,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.primary,
+    },
+  }), [colors, name]);
+
+  return <NavigationContainer theme={navTheme}>{children}</NavigationContainer>;
+}
+```
+
+Place inside the theme provider:
+
+```tsx
+<ThemeTransitionProvider initialTheme="system">
+  <ThemedNavigation>
+    <AppNavigator />
+  </ThemedNavigation>
+</ThemeTransitionProvider>
+```
+
+## Expo Router
+
+With Expo Router, use `ThemeProvider` from `@react-navigation/native`:
+
+<Callout type="info">
+  These examples use `name === 'dark'` for simplicity. If your app has
+  custom dark-ish themes (e.g. `'ocean'`, `'midnight'`), define a set
+  and check membership: `const DARK_THEMES = new Set(['dark', 'ocean']); dark: DARK_THEMES.has(name)`.
+</Callout>
+
+```tsx title="app/_layout.tsx"
+import { ThemeProvider } from '@react-navigation/native';
+import { ThemeTransitionProvider, useTheme } from '@/lib/theme';
+import { Stack } from 'expo-router';
+
+function InnerLayout() {
+  const { colors, name } = useTheme();
+
+  return (
+    <ThemeProvider value={{
+      dark: name === 'dark',
+      colors: {
+        primary: colors.primary,
+        background: colors.background,
+        card: colors.card,
+        text: colors.text,
+        border: colors.border,
+        notification: colors.primary,
+      },
+    }}>
+      <Stack screenOptions={{ headerShown: false }} />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeTransitionProvider initialTheme="system">
+      <InnerLayout />
+    </ThemeTransitionProvider>
+  );
+}
+```
