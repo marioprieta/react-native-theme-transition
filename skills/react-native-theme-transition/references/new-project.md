@@ -261,9 +261,8 @@ function ThemeToggle() {
     <Pressable
       onPress={() => setTheme(name === 'light' ? 'dark' : 'light')}
       disabled={isTransitioning}
-      style={{ opacity: isTransitioning ? 0.5 : 1 }}
     >
-      <Text>{name === 'light' ? 'Switch to Dark' : 'Switch to Light'}</Text>
+      <Text>Switch theme</Text>
     </Pressable>
   );
 }

@@ -1,0 +1,71 @@
+---
+title: System Theme
+description: Follow OS appearance automatically with zero-flash startup.
+---
+
+## Basic setup
+
+Pass `initialTheme="system"` to follow OS appearance from the first frame:
+
+```tsx
+<ThemeTransitionProvider initialTheme="system">
+  <App />
+</ThemeTransitionProvider>
+```
+
+With custom theme names, add `systemThemeMap`:
+
+```ts
+export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
+  themes: { sunrise, midnight },
+  systemThemeMap: { light: 'sunrise', dark: 'midnight' },
+});
+```
+
+## Entering and exiting system mode
+
+```tsx
+setTheme('system');  // enter — subscribes to OS changes
+setTheme('dark');    // exit — manual mode, ignores OS
+```
+
+## What happens under the hood
+
+- **Foreground**: OS appearance change triggers an animated transition
+- **Background**: OS appearance change triggers an instant switch (no visible animation)
+- **Returning to foreground**: re-reads OS scheme with instant switch
+
+## StatusBar sync
+
+The library doesn't manage StatusBar. Sync it manually:
+
+```tsx
+import { StatusBar } from 'expo-status-bar';
+import { useTheme } from '@/lib/theme';
+
+function StatusBarSync() {
+  const { name } = useTheme();
+  return <StatusBar style={name === 'dark' ? 'light' : 'dark'} />;
+}
+```
+
+### With Appearance.setColorScheme
+
+Sync native UI elements (alerts, date pickers) with the theme:
+
+```tsx
+import { useEffect } from 'react';
+import { Appearance } from 'react-native';
+import { useTheme } from '@/lib/theme';
+
+function ThemeBridge() {
+  const { name } = useTheme();
+
+  useEffect(() => {
+    const isDark = name === 'dark';
+    Appearance.setColorScheme(isDark ? 'dark' : 'light');
+  }, [name]);
+
+  return null;
+}
+```

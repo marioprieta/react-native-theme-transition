@@ -16,7 +16,7 @@ import type {
   ThemeDefinition,
   ThemeNames,
 } from './types';
-import { createProviderAndContext } from './provider';
+import { createProviderAndContext } from './transitionEngine';
 import { createUseTheme } from './hooks/useTheme';
 
 /**
@@ -67,6 +67,12 @@ export function createThemeTransition<
   }
 
   if (config.systemThemeMap) {
+    if (!('light' in config.systemThemeMap) || !('dark' in config.systemThemeMap)) {
+      throw new Error(
+        '[react-native-theme-transition] `systemThemeMap` must provide both `light` and `dark` keys.',
+      );
+    }
+
     for (const [scheme, name] of Object.entries(config.systemThemeMap)) {
       if (!(name in config.themes)) {
         throw new Error(

@@ -153,11 +153,12 @@ export interface SetThemeOptions<Names extends string = string> {
 }
 
 /**
- * Internal context value flowing through the provider.
+ * Base return type of the {@link ThemeTransitionAPI.useTheme | useTheme} hook.
  *
- * @internal
+ * @typeParam Tokens - Union of token name strings.
+ * @typeParam Names - Union of theme name strings.
  */
-export interface ThemeTransitionContextValue<
+export interface UseThemeResult<
   Tokens extends string,
   Names extends string,
 > {
@@ -165,10 +166,40 @@ export interface ThemeTransitionContextValue<
   colors: Record<Tokens, string>;
   /** Name of the currently active theme (resolved, never `'system'`). */
   name: Names;
-  /** Switch to a new theme or enter system mode. */
-  setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => void;
+  /**
+   * Switch to a new theme or enter system mode.
+   *
+   * @param name - Target theme name or `'system'`.
+   * @param options - Optional transition configuration.
+   * @returns `true` if the theme change was accepted, `false` if rejected
+   *          (already transitioning or same theme).
+   */
+  setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => boolean;
   /** `true` while a cross-fade transition overlay is visible. */
   isTransitioning: boolean;
+}
+
+/**
+ * Selection state returned by {@link ThemeTransitionAPI.useTheme | useTheme}
+ * when called with `{ initialSelection }`.
+ *
+ * @typeParam Names - Union of theme name strings.
+ */
+export interface ThemeSelectionResult<Names extends string> {
+  /** The currently selected option (may be `'system'`). */
+  selected: Names | 'system';
+  /**
+   * Select a theme with transition-safe timing.
+   *
+   * @remarks
+   * Updates the selection highlight immediately, then defers `setTheme`
+   * to the next animation frame so the selection is painted before
+   * the library captures the screenshot. Rapid presses during an
+   * ongoing transition are silently ignored.
+   *
+   * @param option - Theme name or `'system'`.
+   */
+  select: (option: Names | 'system') => void;
 }
 
 /**
@@ -198,25 +229,60 @@ export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
   }>;
 
   /**
-   * Hook returning the current theme name, colors, and transition controls.
+   * Hook returning the current theme state and transition controls.
    *
-   * @returns An object with `colors`, `name`, `setTheme`, and `isTransitioning`.
+   * @remarks
+   * **Without arguments** — returns theme colors, name, `setTheme`, and
+   * `isTransitioning`. Use this in any component that reads or changes the theme.
+   *
+   * **With `{ initialSelection }`** — also returns `selected` and `select` for
+   * building theme selection UIs (button groups, toggles, checkmark lists) with
+   * transition-safe timing. On iOS (especially 120Hz ProMotion), calling
+   * `setTheme` synchronously after a UI state update can cause the screenshot
+   * to capture the old state, producing visible flickering. The `select`
+   * function handles this automatically by deferring `setTheme` to the next
+   * animation frame.
+   *
+   * `initialSelection` sets the starting value of `selected` (read once, like
+   * `useState`). When omitted, defaults to the current theme name from context.
    *
    * @throws If called outside a `ThemeTransitionProvider`.
+   *
+   * @example
+   * ```tsx
+   * // Reading theme colors in any component
+   * const { colors, name } = useTheme();
+   * ```
+   *
+   * @example
+   * ```tsx
+   * // Building a theme selection UI
+   * function ThemePicker() {
+   *   const { selected, select, colors, isTransitioning } = useTheme({ initialSelection: 'system' });
+   *   return (
+   *     <View style={{ flexDirection: 'row', gap: 8 }}>
+   *       {(['system', 'light', 'dark'] as const).map((option) => (
+   *         <Pressable
+   *           key={option}
+   *           onPress={() => select(option)}
+   *           disabled={isTransitioning}
+   *           style={{ backgroundColor: option === selected ? colors.primary : 'transparent' }}
+   *         >
+   *           <Text>{option}</Text>
+   *         </Pressable>
+   *       ))}
+   *     </View>
+   *   );
+   * }
+   * ```
    */
-  useTheme: () => {
-    /** Resolved color values for every token in the active theme. */
-    colors: { [K in TokenNames<T>]: string };
-    /** Name of the currently active theme (resolved, never `'system'`). */
-    name: ThemeNames<T>;
+  useTheme: {
+    /** Returns current theme state and controls. */
+    (): UseThemeResult<TokenNames<T>, ThemeNames<T>>;
     /**
-     * Switch to a different theme or enter system mode.
-     *
-     * @param name - Target theme name or `'system'`.
-     * @param options - Optional transition callbacks.
+     * Returns theme state, controls, and selection tracking with transition-safe timing.
+     * @param options.initialSelection - Starting value for `selected`. Defaults to the current theme name.
      */
-    setTheme: (name: ThemeNames<T> | 'system', options?: SetThemeOptions<ThemeNames<T>>) => void;
-    /** `true` while a cross-fade transition is in progress. */
-    isTransitioning: boolean;
+    (options: { initialSelection?: ThemeNames<T> | 'system' }): UseThemeResult<TokenNames<T>, ThemeNames<T>> & ThemeSelectionResult<ThemeNames<T>>;
   };
 }

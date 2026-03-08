@@ -17,14 +17,15 @@ Expo Go compatible, 100% JS, powered by Reanimated.
 ## How it works
 
 1. Block touches instantly via Reanimated shared value (no React render needed)
-2. Wait 1 frame for pending React state to flush
+2. Wait 2 frames for the JS → Shadow Tree → Native UI pipeline to fully paint
 3. Capture full-screen screenshot via `react-native-view-shot`
 4. Mount screenshot as opaque overlay
 5. `Image.onLoad` confirms the bitmap is decoded (event-based)
 6. Wait 1 frame for the compositor to paint the overlay on screen
 7. Switch color tokens underneath
-8. Fade overlay out immediately on the UI thread via Reanimated
-9. Remove overlay, unblock touches, fire completion callbacks
+8. Wait 1 frame for React to commit the new theme under the still-opaque overlay
+9. Fade overlay out on the UI thread via Reanimated
+10. Remove overlay, unblock touches, fire completion callbacks
 
 The screenshot is captured BEFORE the color switch — the overlay is identical to
 what was on screen. When it fades, it reveals the fully rendered new theme.

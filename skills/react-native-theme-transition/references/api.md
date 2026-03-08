@@ -5,17 +5,18 @@
 1. [createThemeTransition](#createthemetransitionconfig)
 2. [ThemeTransitionProvider](#themetransitionprovider)
 3. [useTheme](#usetheme)
-4. [setTheme](#setthemename-options)
-5. [Callback ordering](#callback-ordering)
-6. [Exported types](#exported-types)
+4. [useTheme({ initialSelection })](#usetheme-initialselection-)
+5. [setTheme](#setthemename-options)
+6. [Callback ordering](#callback-ordering)
+7. [Exported types](#exported-types)
 
 ---
 
 ## `createThemeTransition(config)`
 
 Factory function. Validates configuration at initialization and returns a self-contained
-`{ ThemeTransitionProvider, useTheme }` pair. No singletons — multiple theme scopes can
-coexist.
+`{ ThemeTransitionProvider, useTheme }` API. No singletons — multiple
+theme scopes can coexist.
 
 TypeScript infers theme names and color tokens from the `themes` object. No manual
 generics needed.
@@ -40,10 +41,11 @@ token keys. Mismatched keys throw at initialization.
 
 ```ts
 const light = { bg: '#fff', text: '#000', primary: '#007AFF' };
-const dark  = { bg: '#000', text: '#fff', primary: '#0A84FF' };
 
-// Type-safe enforcement of matching keys:
-const dark: Record<keyof typeof light, string> = { ... };
+// Type-safe enforcement of matching keys on secondary themes:
+const dark: Record<keyof typeof light, string> = {
+  bg: '#000', text: '#fff', primary: '#0A84FF',
+};
 ```
 
 Rules:
@@ -152,7 +154,7 @@ const { colors, name, setTheme, isTransitioning } = useTheme();
 |---|---|---|
 | `colors` | `{ [token]: string }` | Current theme's color values, typed to your tokens |
 | `name` | `ThemeName` | Active theme name (resolved, never `'system'`) |
-| `setTheme` | `(name \| 'system', opts?) => void` | Trigger transition or enter system mode |
+| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger transition or enter system mode. Returns `true` if accepted, `false` if rejected (same theme or already transitioning). |
 | `isTransitioning` | `boolean` | `true` while cross-fade overlay is visible |
 
 ### `colors`
@@ -171,11 +173,101 @@ the actual theme (`'light'` or `'dark'`, or whatever `systemThemeMap` resolves t
 
 ### `isTransitioning`
 
-`true` from when `setTheme` triggers an animated transition until the fade completes.
+`true` from after the screenshot is captured until the fade completes. Touch input
+is blocked immediately when `setTheme` is called, regardless of this flag.
 Use it to:
 - Disable toggle buttons (`disabled={isTransitioning}`)
 - Defer expensive renders
 - Show loading indicators
+
+---
+
+## `useTheme({ initialSelection })`
+
+Overloaded form of `useTheme`. Passing an options object activates selection tracking
+with iOS-safe timing. Returns all base `useTheme()` fields plus `selected` and `select`.
+Throws if called outside a `ThemeTransitionProvider`.
+
+```ts
+const { selected, select, colors, name, setTheme, isTransitioning } = useTheme({ initialSelection: 'system' });
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `colors` | `{ [token]: string }` | Current theme's color values, typed to your tokens |
+| `name` | `ThemeName` | Active theme name (resolved, never `'system'`) |
+| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger transition or enter system mode |
+| `isTransitioning` | `boolean` | `true` while cross-fade overlay is visible |
+| `selected` | `ThemeName \| 'system'` | Currently selected option (may be `'system'`) |
+| `select` | `(option: ThemeName \| 'system') => void` | Select a theme with safe timing |
+
+### The `initialSelection` option
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `initialSelection` | `ThemeName \| 'system'` | current theme name | Starting value for `selected` (read once) |
+
+`initialSelection` seeds the initial `selected` state. When omitted, defaults to the
+current theme name from context. It is read once — subsequent changes to the argument
+are ignored (same lazy-init pattern as `initialTheme`).
+
+### How `select` works
+
+On iOS 120Hz displays, calling `setSelected()` and `setTheme()` in the same event
+handler doesn't give React enough time to paint the selection before the library
+captures the screenshot. The cross-fade then blends both old and new selection
+positions, causing visible flickering.
+
+`select` solves this by:
+
+1. Updating the selection state immediately (`setSelected`)
+2. Deferring `setTheme` by one `requestAnimationFrame`
+3. Using an internal press lock ref to prevent rapid presses during transitions
+
+This guarantees the selection highlight is painted before the screenshot capture.
+
+### Example
+
+```tsx
+function ThemePicker() {
+  const { selected, select, colors, isTransitioning } = useTheme({ initialSelection: 'system' });
+  const options = ['system', 'light', 'dark'] as const;
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {options.map((option) => (
+        <Pressable
+          key={option}
+          onPress={() => select(option)}
+          disabled={isTransitioning}
+          style={{
+            flex: 1,
+            padding: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            backgroundColor: option === selected ? colors.primary : 'transparent',
+          }}
+        >
+          <Text style={{ color: option === selected ? '#fff' : colors.text }}>
+            {option}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+```
+
+### Caveat: `selected` is local state
+
+`selected` is managed locally inside the hook. If the theme changes externally — via a bridge
+component calling `setTheme`, or a system appearance change — the context `name` updates but
+`selected` does not. This means the picker UI can show a stale selection until the user
+interacts with it again.
+
+If you need the picker to stay in sync with external changes, use `name` for display and
+`selected` only for the highlight state, or re-mount the picker when the theme changes
+externally.
 
 ---
 
@@ -206,8 +298,8 @@ interface SetThemeOptions {
 
 ### Behavior rules
 
-1. **Same theme** → no-op (if target equals current, nothing happens)
-2. **During transition** → silently ignored (no queue, no error)
+1. **Same theme** → returns `false` (if target equals current, nothing happens)
+2. **During transition** → returns `false` (no queue, no error). System mode is **not** activated even if `'system'` was passed — retry after `isTransitioning` becomes `false`
 3. **`'system'`** → enters system-following mode, subscribes to OS changes
 4. **Explicit name** → exits system-following mode
 5. **`animated: false`** → instant switch, only `onThemeChange` fires
@@ -238,12 +330,13 @@ Calling `setTheme('dark')` (or any explicit name) exits system mode.
 6. Image onLoad (bitmap decoded)
 7. Overlay paints (1 frame)
 8. Colors switched underneath
-9. Fade animation starts immediately (duration ms)
-10. Transition guards reset, touch unblocked
-11. Config onTransitionEnd(name)
-12. Per-call onTransitionEnd(name)
-13. Config onThemeChange(name)
-14. Next render: isTransitioning → false, overlay unmounted
+9. React commits new theme (1 frame)
+10. Fade animation starts (duration ms)
+11. Transition guards reset, touch unblocked
+12. Config onTransitionEnd(name)
+13. Per-call onTransitionEnd(name)
+14. Config onThemeChange(name)
+15. Next render: isTransitioning → false, overlay unmounted
 ```
 
 ### Instant switch (`animated: false`)
@@ -284,6 +377,8 @@ import type {
   ThemeDefinition,       // Record<string, string> — single theme shape
   ThemeTransitionConfig, // Config for createThemeTransition
   ThemeTransitionAPI,    // Return type: { ThemeTransitionProvider, useTheme }
+  UseThemeResult,        // Return type of useTheme()
+  ThemeSelectionResult,  // Selection fields from useTheme({ initialSelection })
   SystemThemeMap,        // { light: ThemeName, dark: ThemeName }
   SetThemeOptions,       // Options for setTheme()
   ThemeNames,            // Union of theme name strings (keyof themes & string)
@@ -297,10 +392,10 @@ import type {
 const light = { bg: '#fff', text: '#000' };
 const dark  = { bg: '#000', text: '#fff' };
 
-const { useTheme } = createThemeTransition({ themes: { light, dark } });
+const api = createThemeTransition({ themes: { light, dark } });
 
 // In any component:
-const { colors, name, setTheme } = useTheme();
+const { colors, name, setTheme } = api.useTheme();
 
 colors.bg         // type: string, autocomplete: 'bg' | 'text'
 colors.foo        // ❌ TypeScript error

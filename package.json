@@ -20,16 +20,15 @@
   "files": [
     "src",
     "dist",
-    "docs",
     "README.md",
-    "skills",
     "LICENSE",
     "!**/__tests__",
     "!**/.*"
   ],
   "scripts": {
+    "prebuild": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc",
-    "prepublishOnly": "tsc",
+    "prepublishOnly": "npm run build",
     "release": "npm publish --provenance --access public --dry-run"
   },
   "keywords": [

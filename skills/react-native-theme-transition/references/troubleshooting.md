@@ -4,23 +4,104 @@ Common issues, causes, and solutions.
 
 ## Table of contents
 
-1. [Overlay stays visible / app seems frozen](#overlay-stays-visible--app-seems-frozen)
-2. [Flash on theme change (no animation)](#flash-on-theme-change-no-animation)
-3. [System theme not following OS](#system-theme-not-following-os)
-4. [Type errors on colors](#type-errors-on-colors)
-5. [Error: themes must contain at least one theme](#error-themes-must-contain-at-least-one-theme)
-6. [Error: system is a reserved name](#error-system-is-a-reserved-name)
-7. [Error: different token keys](#error-different-token-keys)
-8. [Error: systemThemeMap maps to non-existent theme](#error-systemthememap-maps-to-non-existent-theme)
-9. [Error: initialTheme resolved to non-existent theme](#error-initialtheme-resolved-to-non-existent-theme)
-10. [Error: setTheme('system') resolved to non-existent theme](#error-setthemesystem-resolved-to-non-existent-theme)
-11. [Error: useTheme must be used inside a ThemeTransitionProvider](#error-usetheme-must-be-used-inside-a-themetransitionprovider)
-12. [Theme changes but no animation plays](#theme-changes-but-no-animation-plays)
-13. [setTheme does nothing](#settheme-does-nothing)
-14. [Double transition on app start](#double-transition-on-app-start)
-15. [Android: capture returns blank or wrong content](#android-capture-returns-blank-or-wrong-content)
-16. [Duplicate plugin/preset detected (babel error)](#duplicate-pluginpreset-detected-babel-error)
-17. [Cannot find module 'babel-preset-expo'](#cannot-find-module-babel-preset-expo)
+1. [iOS picker flickering during transition](#ios-picker-flickering-during-transition)
+2. [Overlay stays visible / app seems frozen](#overlay-stays-visible--app-seems-frozen)
+3. [Native Switch flickers during theme transition](#native-switch-flickers-during-theme-transition)
+4. [Flash on theme change (no animation)](#flash-on-theme-change-no-animation)
+5. [System theme not following OS](#system-theme-not-following-os)
+6. [Type errors on colors](#type-errors-on-colors)
+7. [Error: themes must contain at least one theme](#error-themes-must-contain-at-least-one-theme)
+8. [Error: system is a reserved name](#error-system-is-a-reserved-name)
+9. [Error: different token keys](#error-different-token-keys)
+10. [Error: systemThemeMap maps to non-existent theme](#error-systemthememap-maps-to-non-existent-theme)
+11. [Error: initialTheme resolved to non-existent theme](#error-initialtheme-resolved-to-non-existent-theme)
+12. [Error: setTheme('system') resolved to non-existent theme](#error-setthemesystem-resolved-to-non-existent-theme)
+13. [Error: useTheme must be used inside a ThemeTransitionProvider](#error-usetheme-must-be-used-inside-a-themetransitionprovider)
+14. [Theme changes but no animation plays](#theme-changes-but-no-animation-plays)
+15. [setTheme does nothing](#settheme-does-nothing)
+16. [Double transition on app start](#double-transition-on-app-start)
+17. [Android: capture returns blank or wrong content](#android-capture-returns-blank-or-wrong-content)
+18. [Duplicate plugin/preset detected (babel error)](#duplicate-pluginpreset-detected-babel-error)
+19. [Cannot find module 'babel-preset-expo'](#cannot-find-module-babel-preset-expo)
+
+---
+
+## iOS picker flickering during transition
+
+**Symptom:** On iOS, a theme picker with highlighted buttons flickers during the
+cross-fade — the selection indicator alternates between the old and new button
+positions. More visible with 3+ themes on ProMotion (120Hz) displays.
+
+**Cause:** Calling `setSelected()` and `setTheme()` synchronously in the same
+event handler doesn't give React enough time to paint the selection change before
+the library captures the screenshot. The screenshot captures the old selection,
+the real UI shows the new selection, and the cross-fade blends both — producing
+visible flickering for discrete UI elements like button highlights.
+
+**Fix:** Use `useTheme({ initialSelection })`, which handles the timing automatically:
+
+```tsx
+const { selected, select, colors, isTransitioning } = useTheme({ initialSelection: 'system' });
+
+// In your button:
+<Pressable onPress={() => select(option)} disabled={isTransitioning}>
+```
+
+If you're managing selection state manually, defer `setTheme` by one animation
+frame so the selection highlight is painted before capture:
+
+```tsx
+setSelected(option);
+requestAnimationFrame(() => {
+  setTheme(option);
+});
+```
+
+See [Recipes: Theme picker](recipes.md#theme-picker-with-selection-tracking) for
+complete examples.
+
+---
+
+## Native Switch flickers during theme transition
+
+**Symptom:** On iOS, a native `<Switch>` toggles mid-animation in the screenshot,
+causing the thumb to appear in an intermediate position during the cross-fade.
+
+**Cause:** iOS's `UISwitch` runs a ~250ms Core Animation that has no completion
+callback and cannot be intercepted from JS. `react-native-view-shot` uses
+`drawViewHierarchyInRect:afterScreenUpdates:YES` which captures the on-screen
+visual state — including the thumb mid-slide. This is a fundamental incompatibility
+between native Switch and screenshot-based transitions.
+
+**Fix:** Use a custom toggle with `useTheme({})` and **plain React styles**
+(no Reanimated). The toggle thumb is a selection indicator — like a picker
+highlight — so it needs the same treatment: update the visual state **before**
+the screenshot capture.
+
+```tsx
+const { selected, select, colors, isTransitioning } = useTheme({});
+const isDark = selected === 'dark';
+
+// select() updates selected → React commits new styles → 1 rAF → setTheme → capture
+<Pressable onPress={() => select(isDark ? 'light' : 'dark')} disabled={isTransitioning}>
+  <View style={{ backgroundColor: isDark ? colors.primary : colors.border }}>
+    <View style={{ transform: [{ translateX: isDark ? MAX_TX : 0 }] }} />
+  </View>
+</Pressable>
+```
+
+> **Why plain styles, not Reanimated?** Reanimated's `useAnimatedStyle` +
+> `useEffect` → `sharedValue` adds 1+ frames of latency (JS → UI thread
+> pipeline). The capture can fire before the native view updates. Plain
+> React styles update in the same commit as `select`, matching the
+> pattern that works for pickers and checkmark lists.
+>
+> **Why not a hardcoded delay?** iOS's UISwitch animation duration is private
+> API with no completion callback. A `setTimeout` would be fragile across
+> devices, refresh rates, and accessibility settings. No production app or
+> library combines native Switch with screenshot-based transitions.
+
+See [Recipes: Theme toggle](recipes.md#theme-toggle) for a complete example.
 
 ---
 
@@ -246,9 +327,11 @@ You're calling `useTheme()` in a component that isn't a descendant of
 
 **Causes:**
 
-1. **Same theme** — `setTheme('dark')` when already on `'dark'` is a no-op.
-2. **During transition** — `setTheme` during an ongoing transition is silently
-   ignored. Wait for `isTransitioning` to become `false`.
+1. **Same theme** — `setTheme('dark')` when already on `'dark'` returns `false`.
+2. **During transition** — `setTheme` during an ongoing transition returns `false`.
+   Wait for `isTransitioning` to become `false`. Note: `setTheme('system')` during
+   a transition does **not** activate system mode — the call is fully rejected.
+   Retry after the transition completes.
 3. **System mode dedup** — `setTheme('system')` when the OS-resolved theme matches
    the current theme activates system mode but doesn't trigger a visual change.
 

@@ -13,10 +13,12 @@ Complete examples for every feature and integration pattern.
 7. [Haptic feedback](#haptic-feedback)
 8. [Analytics / tracking](#analytics--tracking)
 9. [Disable UI during transitions](#disable-ui-during-transitions)
-10. [Instant switches (no animation)](#instant-switches)
-11. [Bottom sheets and modals](#bottom-sheets-and-modals)
-12. [Conditional assets per theme](#conditional-assets-per-theme)
-13. [Themed StyleSheet factory](#themed-stylesheet-factory)
+10. [Theme toggle](#theme-toggle)
+11. [Instant switches (no animation)](#instant-switches)
+12. [Bottom sheets and modals](#bottom-sheets-and-modals)
+13. [Conditional assets per theme](#conditional-assets-per-theme)
+14. [Themed StyleSheet factory](#themed-stylesheet-factory)
+15. [Checkmark list picker](#checkmark-list-picker)
 
 ---
 
@@ -170,34 +172,104 @@ export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
 });
 ```
 
-### Theme picker
+### Theme picker (with selection tracking)
+
+Use `useTheme({ initialSelection })` for a flicker-free picker that handles
+iOS 120Hz timing and rapid-press protection:
 
 ```tsx
 function ThemePicker() {
-  const { colors, name, setTheme, isTransitioning } = useTheme();
-  const themes = ['sunrise', 'midnight', 'ocean', 'system'] as const;
+  const { selected, select, colors, isTransitioning } = useTheme({ initialSelection: 'system' });
+  const options = ['system', 'sunrise', 'midnight', 'ocean'] as const;
 
   return (
     <View style={{ flexDirection: 'row', gap: 8 }}>
-      {themes.map((t) => (
+      {options.map((option) => (
         <Pressable
-          key={t}
-          onPress={() => setTheme(t)}
+          key={option}
+          onPress={() => select(option)}
           disabled={isTransitioning}
           style={{
+            flex: 1,
             padding: 12,
             borderRadius: 8,
-            borderWidth: t === name || (t === 'system') ? 2 : 0,
-            borderColor: colors.primary,
+            alignItems: 'center',
+            backgroundColor: option === selected ? colors.primary : 'transparent',
           }}
         >
-          <Text>{t}</Text>
+          <Text style={{ color: option === selected ? '#fff' : colors.text }}>
+            {option}
+          </Text>
         </Pressable>
       ))}
     </View>
   );
 }
 ```
+
+### Theme picker (manual, without selection tracking)
+
+If you need full control over the selection state, use `setTheme` directly
+with `requestAnimationFrame` to avoid iOS flickering:
+
+```tsx
+function ThemePicker() {
+  const { colors, setTheme, isTransitioning } = useTheme();
+  type Option = 'system' | 'sunrise' | 'midnight' | 'ocean';
+  const [selected, setSelected] = useState<Option>('system');
+  const lockRef = useRef(false);
+  const options: readonly Option[] = ['system', 'sunrise', 'midnight', 'ocean'];
+
+  useEffect(() => {
+    if (!isTransitioning) lockRef.current = false;
+  }, [isTransitioning]);
+
+  const onSelect = useCallback(
+    (option: Option) => {
+      if (lockRef.current) return;
+      lockRef.current = true;
+      // Update selection BEFORE setTheme so it's painted before capture.
+      setSelected(option);
+      requestAnimationFrame(() => {
+        if (setTheme(option)) return;
+        lockRef.current = false;
+      });
+    },
+    [setTheme],
+  );
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {options.map((option) => (
+        <Pressable
+          key={option}
+          onPress={() => onSelect(option)}
+          disabled={isTransitioning}
+          style={{
+            flex: 1,
+            padding: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            backgroundColor: option === selected ? colors.primary : 'transparent',
+          }}
+        >
+          <Text style={{ color: option === selected ? '#fff' : colors.text }}>
+            {option}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+```
+
+> **Why `requestAnimationFrame`?** On iOS 120Hz, calling `setSelected` and
+> `setTheme` in the same event handler doesn't give React enough time to
+> paint the selection change before the library captures the screenshot.
+> Deferring `setTheme` by one frame guarantees the new highlight is visible
+> in the screenshot, so the cross-fade only blends colors — not selection
+> position. `useTheme({ initialSelection })` handles this automatically. See
+> [Troubleshooting: iOS picker flickering](troubleshooting.md#ios-picker-flickering-during-transition).
 
 ---
 
@@ -393,7 +465,6 @@ export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
 <Pressable
   onPress={() => setTheme('dark')}
   disabled={isTransitioning}
-  style={{ opacity: isTransitioning ? 0.5 : 1 }}
 >
   <Text>Switch theme</Text>
 </Pressable>
@@ -412,6 +483,88 @@ function HeavyChart() {
   return <ExpensiveChartComponent colors={colors} />;
 }
 ```
+
+---
+
+## Theme toggle
+
+> **Do not use the native `<Switch>` for theme toggling.** iOS's UISwitch runs
+> a ~250ms Core Animation with no completion callback. The screenshot captures
+> the thumb mid-slide, causing a visible flicker during the cross-fade. No
+> production app or library combines native Switch with screenshot-based
+> transitions. See [Troubleshooting: Native Switch flickers](troubleshooting.md#native-switch-flickers-during-theme-transition).
+
+Use `useTheme({})` — not plain `useTheme()` — because the toggle thumb is a
+selection indicator (just like a picker highlight). `useTheme({})` returns
+`selected` (defaulting to the current theme) and `select`, which updates
+`selected` **before** the screenshot capture, so the overlay and real UI show
+the same thumb position. Without it, the overlay shows the old position and the
+real UI shows the new one, causing both to blend during the cross-fade.
+
+> **Rule of thumb:** any component whose visual state changes on theme switch
+> needs `useTheme({})`. The only component that can use `setTheme` directly is
+> a button whose content doesn't change (e.g., a plain "Switch theme" label).
+
+```tsx
+import { View, Text, Pressable } from 'react-native';
+import { useTheme } from '@/lib/theme';
+
+const TRACK_W = 50;
+const TRACK_H = 30;
+const THUMB = 26;
+const PAD = 2;
+const MAX_TX = TRACK_W - THUMB - PAD * 2;
+
+export function ThemeToggle() {
+  const { selected, select, colors, isTransitioning } = useTheme({});
+  const isDark = selected === 'dark';
+
+  return (
+    <Pressable
+      onPress={() => select(isDark ? 'light' : 'dark')}
+      disabled={isTransitioning}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: colors.card,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <Text style={{ fontSize: 16, color: colors.text }}>Dark Mode</Text>
+      <View
+        style={{
+          width: TRACK_W, height: TRACK_H,
+          borderRadius: TRACK_H / 2, padding: PAD,
+          justifyContent: 'center',
+          backgroundColor: isDark ? colors.primary : colors.border,
+        }}
+      >
+        <View
+          style={{
+            width: THUMB, height: THUMB, borderRadius: THUMB / 2,
+            backgroundColor: '#fff',
+            shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.2, shadowRadius: 2, elevation: 2,
+            transform: [{ translateX: isDark ? MAX_TX : 0 }],
+          }}
+        />
+      </View>
+    </Pressable>
+  );
+}
+```
+
+> **Why plain styles, not Reanimated?** The visual state must update in React's
+> commit cycle — the same cycle that `useTheme({})` triggers.
+> Reanimated's `useAnimatedStyle` + `useEffect` → `sharedValue` adds 1+ extra
+> frames of latency (JS → UI thread), and the capture can happen before the
+> native view is updated. Plain styles update in the same React commit, matching
+> the pattern that works for the pill picker.
 
 ---
 
@@ -515,6 +668,63 @@ function ProfileScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Profile</Text>
       <View style={styles.card}>{/* ... */}</View>
+    </View>
+  );
+}
+```
+
+---
+
+## Checkmark list picker
+
+An iOS Settings-style list where the selected theme shows a checkmark.
+Uses `useTheme({ initialSelection })` for flicker-free selection and system mode support:
+
+```tsx
+import { View, Text, Pressable } from 'react-native';
+import { useTheme } from '@/lib/theme';
+
+const OPTIONS = ['system', 'light', 'dark'] as const;
+const LABELS = { system: 'System', light: 'Light', dark: 'Dark' };
+
+export function ThemeList() {
+  const { selected, select, colors, isTransitioning } = useTheme({ initialSelection: 'system' });
+
+  return (
+    <View
+      style={{
+        backgroundColor: colors.card,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        overflow: 'hidden',
+      }}
+    >
+      {OPTIONS.map((option, i) => (
+        <Pressable
+          key={option}
+          onPress={() => select(option)}
+          disabled={isTransitioning}
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingVertical: 13,
+            paddingHorizontal: 16,
+            borderBottomWidth: i < OPTIONS.length - 1 ? 1 : 0,
+            borderBottomColor: colors.border,
+          }}
+        >
+          <Text style={{ fontSize: 16, color: colors.text }}>
+            {LABELS[option]}
+          </Text>
+          {option === selected && (
+            <Text style={{ fontSize: 17, color: colors.primary, fontWeight: '600' }}>
+              ✓
+            </Text>
+          )}
+        </Pressable>
+      ))}
     </View>
   );
 }

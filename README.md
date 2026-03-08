@@ -20,7 +20,7 @@ Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS
 
 Theme transitions in React Native have always needed custom native modules. That means no Expo Go, no OTA updates, and extra maintenance for each platform.
 
-This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a smooth cross-fade that works everywhere, no native code needed. All peer dependencies are bundled in Expo Go (SDK 54+). Only `react-native-view-shot` and `react-native-worklets` need to be added to your project.
+This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a smooth cross-fade that works everywhere, no native code needed. All peer dependencies ship with Expo Go (SDK 54+) — only `react-native-worklets` needs to be installed separately.
 
 ## Features
 
@@ -74,14 +74,18 @@ const light = {
   background: '#ffffff',
   card:       '#f5f5f5',
   text:       '#000000',
+  border:     '#e0e0e0',
   primary:    '#007AFF',
+  notification: '#ff3b30',
 };
 
 const dark = {
   background: '#000000',
   card:       '#1c1c1e',
   text:       '#ffffff',
+  border:     '#333333',
   primary:    '#0A84FF',
+  notification: '#ff453a',
 };
 
 export const { ThemeTransitionProvider, useTheme } =
@@ -91,7 +95,7 @@ export const { ThemeTransitionProvider, useTheme } =
 
 // TypeScript infers everything:
 // - Theme names: 'light' | 'dark'
-// - Color tokens: 'background' | 'card' | 'text' | 'primary'
+// - Color tokens: 'background' | 'card' | 'text' | 'border' | 'primary' | 'notification'
 ```
 
 ### 2. Wrap your app
@@ -175,8 +179,8 @@ For instant switches (`animated: false`), only `onThemeChange` fires. If the scr
 You never need to pass generic types manually. TypeScript infers theme names and color tokens directly from your `themes` object:
 
 ```ts
-const light = { background: '#fff', text: '#000', primary: '#007AFF' };
-const dark  = { background: '#000', text: '#fff', primary: '#0A84FF' };
+const light = { background: '#fff', text: '#000', border: '#ddd', primary: '#007AFF', notification: '#ff3b30' };
+const dark  = { background: '#000', text: '#fff', border: '#333', primary: '#0A84FF', notification: '#ff453a' };
 
 const { useTheme } = createThemeTransition({
   themes: { light, dark },
@@ -185,7 +189,7 @@ const { useTheme } = createThemeTransition({
 // In any component:
 const { colors, name, setTheme } = useTheme();
 
-colors.background // ✅ autocomplete: 'background' | 'text' | 'primary'
+colors.background // ✅ autocomplete: 'background' | 'text' | 'border' | 'primary' | 'notification'
 colors.foo        // ❌ TypeScript error: Property 'foo' does not exist
 name              // type: 'light' | 'dark'
 setTheme('dark')  // ✅
@@ -223,13 +227,13 @@ const { colors, name, setTheme, isTransitioning } = useTheme();
 |---|---|---|
 | `colors` | `{ [token]: string }` | Current theme's color values, fully typed to your token names. |
 | `name` | `ThemeName` | Active theme identifier (e.g. `'light'`, `'dark'`). Always the resolved name, never `'system'`. |
-| `setTheme` | `(name, options?) => void` | Triggers a transition to the given theme, or pass `'system'` to follow the OS appearance. |
-| `isTransitioning` | `boolean` | `true` from when `setTheme` is called until the fade animation ends. |
+| `setTheme` | `(name, options?) => boolean` | Triggers a transition to the given theme, or pass `'system'` to follow the OS. Returns `true` if accepted, `false` if rejected (same theme or mid-transition). |
+| `isTransitioning` | `boolean` | `true` from after the screenshot is captured until the fade animation ends. Touch input is blocked immediately when `setTheme` is called, regardless of this flag. |
 
 **Behavior:**
-- Calling `setTheme` with the **current** theme name is a no-op.
-- Calling it **during** an ongoing transition is silently ignored.
-- `setTheme('system')` enters system mode — the provider subscribes to OS appearance changes.
+- Calling `setTheme` with the **current** theme name is a no-op and returns `false`.
+- Calling it **during** an ongoing transition returns `false` without starting a new transition.
+- `setTheme('system')` enters system mode — the provider subscribes to OS appearance changes. If called during a transition, the call is fully rejected (system mode is **not** activated). Retry after `isTransitioning` becomes `false`.
 - `setTheme('dark')` (or any theme name) exits system mode.
 - Use `isTransitioning` to disable toggle buttons or defer expensive renders.
 
@@ -251,6 +255,70 @@ setTheme('dark', {
 
 ---
 
+### `useTheme({ initialSelection })`
+
+When building theme selection UIs (button groups, toggles, checkmark lists),
+pass an options object to activate **selection tracking** with transition-safe timing.
+This prevents iOS flickering by deferring `setTheme` to the next animation frame,
+and includes rapid-press protection via an internal lock.
+
+```tsx
+const { colors, name, setTheme, isTransitioning, selected, select } =
+  useTheme({ initialSelection: 'system' });
+```
+
+`initialSelection` sets the starting value of `selected` (read once, like `useState`).
+When omitted, defaults to the current theme name from context.
+
+| Extra property | Type | Description |
+|---|---|---|
+| `selected` | `ThemeName \| 'system'` | Currently selected option. |
+| `select` | `(option) => void` | Select a theme with transition-safe timing. |
+
+All base properties (`colors`, `name`, `setTheme`, `isTransitioning`) are also available.
+
+**Example:**
+
+```tsx
+function ThemePicker() {
+  const { selected, select, colors, isTransitioning } = useTheme({ initialSelection: 'system' });
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {(['system', 'light', 'dark'] as const).map((option) => (
+        <Pressable
+          key={option}
+          onPress={() => select(option)}
+          disabled={isTransitioning}
+          style={{
+            flex: 1,
+            padding: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            backgroundColor: option === selected ? colors.primary : 'transparent',
+          }}
+        >
+          <Text style={{ color: option === selected ? '#fff' : colors.text }}>
+            {option}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+```
+
+> **When to use `useTheme({})` vs plain `useTheme()`:** If your component has a
+> visual indicator that changes on theme switch (highlighted button, toggle thumb,
+> checkmark), use `useTheme({})` (or `useTheme({ initialSelection: 'system' })` for
+> pickers). If your component just reads colors or has a static button (e.g.,
+> "Switch theme" label that doesn't change), plain `useTheme()` is sufficient.
+> `select()` handles the iOS 120Hz timing automatically — calling `setTheme` directly
+> in the same event handler as a visual state update can cause the screenshot to
+> capture the old state, producing flickering.
+
+---
+
 ### Exported types
 
 For advanced TypeScript usage, these types are available as named imports:
@@ -260,6 +328,8 @@ import type {
   ThemeDefinition,         // Record<string, string> — shape of a single theme
   ThemeTransitionConfig,   // Config object for createThemeTransition
   ThemeTransitionAPI,      // Return type of createThemeTransition
+  UseThemeResult,          // Base return type of useTheme()
+  ThemeSelectionResult,    // Selection fields returned by useTheme({ initialSelection })
   SystemThemeMap,          // systemThemeMap type ({ light: ThemeName, dark: ThemeName })
   SetThemeOptions,         // Options for setTheme ({ animated, onTransitionStart, onTransitionEnd })
   ThemeNames,              // Union of theme name strings: keyof your themes object
@@ -393,7 +463,7 @@ function App() {
 
 The library captures a full-screen screenshot of the current UI, displays it as an opaque overlay, switches all color tokens underneath, then fades the overlay out on the native UI thread via Reanimated. The screenshot is taken **before** the color switch, so the transition is seamless — no partial states, no flashes.
 
-For the full step-by-step breakdown and sequence diagram, see [docs/how-it-works.md](docs/how-it-works.md).
+For the full step-by-step breakdown and sequence diagram, see the [How It Works](docs/content/docs/guides/how-it-works.mdx) guide.
 
 ## Trade-offs
 
@@ -403,10 +473,35 @@ For the full step-by-step breakdown and sequence diagram, see [docs/how-it-works
 
 ## Requirements
 
+- React >= 18.0.0
 - React Native >= 0.76
 - react-native-reanimated >= 4.0.0
 - react-native-view-shot >= 3.0.0
 - react-native-worklets >= 0.5.0
+
+## Future plans
+
+### Animated component support
+
+The screenshot-overlay technique requires that selection indicators (toggle thumbs, picker highlights, checkmarks) use plain React styles — not Reanimated or native animations. This is because the screenshot captures the current visual state, and animated components may be mid-transition when captured.
+
+Planned improvements:
+
+- **`onBeforeCapture` hook** — a callback that fires before the screenshot, letting consumers cancel running animations or snap shared values to their final state.
+- **Capture strategy option** — expose iOS's `renderInContext:` (which captures the model layer / final state) as an alternative to the default `drawViewHierarchyInRect:` (which captures mid-animation state). Trade-off: `renderInContext:` breaks blur effects and some borders.
+
+Not planned (investigated and rejected):
+
+- **Automatic animation detection** — Reanimated does not expose a public API to enumerate running animations.
+- **LayoutAnimation interception** — no JS-side completion callback exists.
+
+### Additional transition effects
+
+The library currently supports cross-fade only. Future versions may add:
+
+- Circular reveal (expanding from touch point)
+- Slide transitions
+- Custom animation curves
 
 ## Agent skill
 

@@ -1,5 +1,5 @@
 /**
- * Screenshot-overlay provider and context factory.
+ * Screenshot-overlay transition engine and provider.
  *
  * @module
  */
@@ -8,7 +8,6 @@ import { createContext, useCallback, useEffect, useMemo, useRef, useState } from
 import { Appearance, AppState, Image, View } from 'react-native';
 import Animated, {
   useAnimatedProps,
-  useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -16,7 +15,7 @@ import { captureRef } from 'react-native-view-shot';
 import { scheduleOnRN } from 'react-native-worklets';
 import type {
   ThemeTransitionConfig,
-  ThemeTransitionContextValue,
+  UseThemeResult,
   SetThemeOptions,
   SystemThemeMap,
   ThemeDefinition,
@@ -24,7 +23,7 @@ import type {
   TokenNames,
 } from './types';
 
-const FILL = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const;
+const ABSOLUTE_FILL = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const;
 // Avoids layout clipping on certain Android API levels.
 const ROOT_STYLE = { flex: 1 } as const;
 
@@ -55,7 +54,7 @@ function waitFrames(n: number): Promise<void> {
 }
 
 /**
- * Returns the current OS color scheme, defaulting to `'light'` when unavailable.
+ * Normalizes an OS color scheme string to `'light'` or `'dark'`.
  *
  * @remarks
  * Only accepts the two known values. Any other input — including `null`,
@@ -64,13 +63,13 @@ function waitFrames(n: number): Promise<void> {
  *
  * @internal
  */
-function getScheme(colorScheme?: string | null): 'light' | 'dark' {
+function normalizeScheme(colorScheme?: string | null): 'light' | 'dark' {
   if (colorScheme === 'dark') return 'dark';
   return 'light';
 }
 
 /**
- * Maps an OS color scheme to a theme name.
+ * Maps an OS color scheme to a theme name via `systemThemeMap`.
  *
  * @remarks
  * The fallback `scheme as Names` is only safe when the themes are named `'light'` and
@@ -81,7 +80,7 @@ function getScheme(colorScheme?: string | null): 'light' | 'dark' {
  *
  * @internal
  */
-function resolveScheme<Names extends string>(
+function mapSchemeToTheme<Names extends string>(
   scheme: 'light' | 'dark',
   mapping?: SystemThemeMap<Names>,
 ): Names {
@@ -106,7 +105,7 @@ export function createProviderAndContext<
   type Names = ThemeNames<T>;
   type Tokens = TokenNames<T>;
 
-  const Context = createContext<ThemeTransitionContextValue<Tokens, Names> | null>(null);
+  const Context = createContext<UseThemeResult<Tokens, Names> | null>(null);
 
   function getColors(name: Names): Record<Tokens, string> {
     return { ...themes[name] } as Record<Tokens, string>;
@@ -119,11 +118,11 @@ export function createProviderAndContext<
     children: React.ReactNode;
     initialTheme: Names | 'system';
   }) {
-    const [resolved, setResolved] = useState<{ colors: Record<Tokens, string>; name: Names }>(() => {
+    const [activeTheme, setActiveTheme] = useState<{ colors: Record<Tokens, string>; name: Names }>(() => {
       const isInitialSystem = initialTheme === 'system';
-      const startScheme = getScheme(Appearance.getColorScheme());
+      const startScheme = normalizeScheme(Appearance.getColorScheme());
       const startTheme = isInitialSystem
-        ? resolveScheme<Names>(startScheme, systemThemeMap)
+        ? mapSchemeToTheme<Names>(startScheme, systemThemeMap)
         : initialTheme;
 
       if (!(startTheme in themes)) {
@@ -137,7 +136,7 @@ export function createProviderAndContext<
       return { colors: getColors(startTheme), name: startTheme };
     });
 
-    const targetRef = useRef(resolved.name);
+    const targetThemeRef = useRef(activeTheme.name);
     const rootRef = useRef<View>(null);
     const transitioningRef = useRef(false);
     // Guards async callbacks against running after unmount.
@@ -155,9 +154,17 @@ export function createProviderAndContext<
     // State (not ref) so unsetting it unmounts the Image, freeing the captured bitmap.
     const [overlayUri, setOverlayUri] = useState<string | null>(null);
     const overlayOpacity = useSharedValue(0);
-    const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.get() }));
-    // Resolved when the overlay Image fires onLoad, confirming the bitmap is decoded.
-    const overlayReadyRef = useRef<(() => void) | null>(null);
+    // Stable reference prevents Reanimated from re-processing the style on React re-renders.
+    const overlayStyle = useMemo(() => ({ opacity: overlayOpacity }), [overlayOpacity]);
+    // Settled when the overlay Image fires onLoad (resolve) or onError (reject).
+    const overlayDecodeRef = useRef<{ resolve: () => void; reject: () => void } | null>(null);
+    const overlaySource = useMemo(() => overlayUri ? { uri: overlayUri } : undefined, [overlayUri]);
+    const onOverlayLoad = useCallback(() => {
+      overlayDecodeRef.current?.resolve();
+    }, []);
+    const onOverlayError = useCallback(() => {
+      overlayDecodeRef.current?.reject();
+    }, []);
 
     useEffect(() => {
       mountedRef.current = true;
@@ -173,29 +180,37 @@ export function createProviderAndContext<
       setOverlayUri(null);
     }, [isBlocking]);
 
-    const transition = useCallback(async (name: Names, options?: SetThemeOptions<Names>) => {
+    const runTransition = useCallback(async (name: Names, options?: SetThemeOptions<Names>) => {
       try {
-        // Pending React state must commit before capture to avoid stale screenshots.
-        await waitFrames(1);
+        // Two frames so the JS → Shadow Tree → Native UI pipeline fully paints
+        // any pending state changes before the screenshot. useTheme({ initialSelection })
+        // adds its own requestAnimationFrame before calling setTheme, giving 3
+        // total frames — enough for React commit + native paint on 120Hz displays.
+        await waitFrames(2);
         if (!mountedRef.current) return;
 
         const uri = await captureRef(rootRef, { format: 'jpg', quality: 0.8 });
         if (!mountedRef.current) return;
 
+        // Safe to trigger re-renders now — screenshot already captured.
+        setIsTransitioning(true);
+
         overlayOpacity.set(1);
 
-        // Wait for the overlay Image to confirm the bitmap is decoded via onLoad.
-        await new Promise<void>((resolve) => {
-          overlayReadyRef.current = resolve;
+        await new Promise<void>((resolve, reject) => {
+          overlayDecodeRef.current = { resolve, reject };
           setOverlayUri(uri);
         });
         if (!mountedRef.current) return;
 
-        // One extra frame for the composited overlay to actually paint on screen.
         await waitFrames(1);
         if (!mountedRef.current) return;
 
-        setResolved({ colors: getColors(name), name });
+        setActiveTheme({ colors: getColors(name), name });
+
+        // Wait for React to commit the new theme under the still-opaque overlay.
+        await waitFrames(1);
+        if (!mountedRef.current) return;
 
         const finishTransition = () => {
           if (!mountedRef.current) return;
@@ -203,6 +218,17 @@ export function createProviderAndContext<
           try { configOnTransitionEnd?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onTransitionEnd threw:', e); }
           try { options?.onTransitionEnd?.(name); } catch (e) { console.warn('[react-native-theme-transition] per-call onTransitionEnd threw:', e); }
           try { onThemeChange?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
+
+          // Reconcile: if the OS appearance changed while the transition was
+          // running and we're in system mode, apply the missed change instantly.
+          if (systemModeRef.current) {
+            const current = mapSchemeToTheme<Names>(normalizeScheme(Appearance.getColorScheme()), systemThemeMap);
+            if (current !== name) {
+              targetThemeRef.current = current;
+              setActiveTheme({ colors: getColors(current), name: current });
+              try { onThemeChange?.(current); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
+            }
+          }
         };
 
         overlayOpacity.set(withTiming(0, { duration }, () => {
@@ -216,41 +242,40 @@ export function createProviderAndContext<
           error,
         );
         if (!mountedRef.current) return;
-        setResolved({ colors: getColors(name), name });
+        setActiveTheme({ colors: getColors(name), name });
         resetTransition();
         try { onThemeChange?.(name); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
       }
     }, [overlayOpacity, resetTransition]);
 
-    const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions<Names>) => {
+    const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions<Names>): boolean => {
       const resolvedTheme = name === 'system'
-        ? resolveScheme<Names>(getScheme(Appearance.getColorScheme()), systemThemeMap)
+        ? mapSchemeToTheme<Names>(normalizeScheme(Appearance.getColorScheme()), systemThemeMap)
         : name;
 
-      // Guard: setTheme('system') with custom theme names and no systemThemeMap falls back
-      // to 'light'/'dark' which may not be registered themes. Fail loudly instead of
-      // silently producing undefined color tokens.
       if (!(resolvedTheme in themes)) {
+        const resolutionHint = name === 'system'
+          ? ' Provide `systemThemeMap` in the config to map OS appearance to your theme names.'
+          : '';
         throw new Error(
-          `[react-native-theme-transition] setTheme('system') resolved to "${resolvedTheme}" which does not exist in themes. ` +
-          `Provide \`systemThemeMap\` in the config to map OS appearance to your theme names.`,
+          `[react-native-theme-transition] setTheme("${name}") resolved to "${resolvedTheme}" which does not exist in themes.${resolutionHint}`,
         );
       }
 
-      if (transitioningRef.current) return;
+      if (transitioningRef.current) return false;
 
       // Set system mode AFTER the transition guard so a rejected call during an ongoing
       // transition doesn't silently activate system-following mode.
       systemModeRef.current = name === 'system';
 
-      if (resolvedTheme === targetRef.current) return;
+      if (resolvedTheme === targetThemeRef.current) return false;
 
-      targetRef.current = resolvedTheme;
+      targetThemeRef.current = resolvedTheme;
 
       if (options?.animated === false) {
-        setResolved({ colors: getColors(resolvedTheme), name: resolvedTheme });
+        setActiveTheme({ colors: getColors(resolvedTheme), name: resolvedTheme });
         try { onThemeChange?.(resolvedTheme); } catch (e) { console.warn('[react-native-theme-transition] config onThemeChange threw:', e); }
-        return;
+        return true;
       }
 
       // Block touches and mark as transitioning BEFORE firing user callbacks to prevent
@@ -266,9 +291,11 @@ export function createProviderAndContext<
         resetTransition();
         throw e;
       }
-      setIsTransitioning(true);
-      transition(resolvedTheme, options);
-    }, [isBlocking, resetTransition, transition]);
+      // isTransitioning is set inside runTransition(), AFTER captureRef, so no React
+      // re-render can alter the native view before the screenshot is taken.
+      runTransition(resolvedTheme, options).catch(() => {});
+      return true;
+    }, [isBlocking, resetTransition, runTransition]);
 
     const appStateRef = useRef(AppState.currentState);
 
@@ -297,21 +324,22 @@ export function createProviderAndContext<
       };
     }, [setTheme]);
 
-    const value = useMemo(() => ({
-      colors: resolved.colors, name: resolved.name, setTheme, isTransitioning,
-    }), [resolved, setTheme, isTransitioning]);
+    const contextValue = useMemo(() => ({
+      colors: activeTheme.colors, name: activeTheme.name, setTheme, isTransitioning,
+    }), [activeTheme, setTheme, isTransitioning]);
 
     return (
-      <Context.Provider value={value}>
+      <Context.Provider value={contextValue}>
         {/* collapsable={false} prevents Android from flattening the view, which breaks captureRef. */}
         <View ref={rootRef} style={ROOT_STYLE} collapsable={false}>
           {children}
-          <Animated.View style={FILL} animatedProps={blockerProps} />
-          {overlayUri != null ? (
-            <Animated.View style={[FILL, overlayStyle]} pointerEvents="none">
-              <Image source={{ uri: overlayUri }} style={FILL} resizeMode="cover" fadeDuration={0} onLoad={() => overlayReadyRef.current?.()} onError={() => overlayReadyRef.current?.()} />
-            </Animated.View>
-          ) : null}
+          <Animated.View style={ABSOLUTE_FILL} animatedProps={blockerProps} />
+          {/* Always mounted so the shared value is permanently connected — no mount-time race. */}
+          <Animated.View style={[ABSOLUTE_FILL, overlayStyle]} pointerEvents="none">
+            {overlayUri != null ? (
+              <Image source={overlaySource} style={ABSOLUTE_FILL} resizeMode="cover" fadeDuration={0} onLoad={onOverlayLoad} onError={onOverlayError} />
+            ) : null}
+          </Animated.View>
         </View>
       </Context.Provider>
     );
