@@ -1,0 +1,63 @@
+---
+title: Getting Started
+description: Install react-native-theme-transition and configure your project.
+---
+
+## Installation
+
+<Tabs items={['Expo (SDK 54+)', 'Expo (SDK < 54)', 'React Native CLI']}>
+  <Tab value="Expo (SDK 54+)">
+    Reanimated and view-shot are already included in Expo Go.
+
+    ```bash
+    npx expo install react-native-theme-transition react-native-worklets
+    ```
+
+    <Callout type="info">
+      **Expo SDK 55+:** The blank template no longer bundles `babel-preset-expo`.
+      If your project doesn't have a `babel.config.js` yet, install it:
+      `npx expo install babel-preset-expo`
+    </Callout>
+  </Tab>
+  <Tab value="Expo (SDK < 54)">
+    ```bash
+    npx expo install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
+    ```
+  </Tab>
+  <Tab value="React Native CLI">
+    ```bash
+    npm install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
+    ```
+
+    Then install iOS pods:
+
+    ```bash
+    cd ios && pod install && cd ..
+    ```
+  </Tab>
+</Tabs>
+
+## Configure Babel
+
+Add `react-native-worklets/plugin` as the **last plugin** in your `babel.config.js`:
+
+```js
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: [
+      // SDK 55+: do NOT add 'react-native-reanimated/plugin' —
+      // babel-preset-expo already includes it from SDK 55 onwards.
+      // SDK 54 and below: you DO need 'react-native-reanimated/plugin' here.
+      'react-native-worklets/plugin', // must be last
+    ],
+  };
+};
+```
+
+## Clear cache and restart
+
+```bash
+npx expo start -c
+```
