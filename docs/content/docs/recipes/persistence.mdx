@@ -1,0 +1,89 @@
+---
+title: Persisted Preference
+description: Save the user's theme choice to AsyncStorage and restore it on app start.
+---
+
+Store the user's choice as `'light' | 'dark' | 'system'` and pass it to
+`initialTheme` on startup.
+
+## With AsyncStorage
+
+```tsx title="app/_layout.tsx"
+import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ThemeTransitionProvider } from '@/lib/theme';
+
+export default function RootLayout() {
+  const [initial, setInitial] = useState<'light' | 'dark' | 'system' | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('theme-preference').then((v) => {
+      setInitial((v as 'light' | 'dark' | 'system') ?? 'system');
+    });
+  }, []);
+
+  if (!initial) return null; // or splash screen
+
+  return (
+    <ThemeTransitionProvider initialTheme={initial}>
+      <App />
+    </ThemeTransitionProvider>
+  );
+}
+```
+
+### Settings screen
+
+```tsx
+import { Button } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '@/lib/theme';
+
+function ThemeSettings() {
+  const { setTheme } = useTheme();
+
+  const handleSelect = async (pref: 'light' | 'dark' | 'system') => {
+    setTheme(pref);
+    await AsyncStorage.setItem('theme-preference', pref);
+  };
+
+  return (
+    <>
+      <Button title="Light"  onPress={() => handleSelect('light')} />
+      <Button title="Dark"   onPress={() => handleSelect('dark')} />
+      <Button title="System" onPress={() => handleSelect('system')} />
+    </>
+  );
+}
+```
+
+## Avoiding double transitions on startup
+
+If `initialTheme="system"` resolves to `'light'` but the stored preference is `'dark'`,
+the app starts light, then immediately transitions to dark.
+
+**Fix:** Pass the stored preference directly as `initialTheme`:
+
+```tsx
+<ThemeTransitionProvider initialTheme={storedPreference}>
+```
+
+Or use an instant switch for the first render:
+
+```tsx
+import { useEffect, useRef } from 'react';
+import { useTheme } from '@/lib/theme';
+
+function ThemeBridge() {
+  const stored = useStoredPreference();
+  const { setTheme } = useTheme();
+  const isFirst = useRef(true);
+
+  useEffect(() => {
+    setTheme(stored, { animated: !isFirst.current });
+    isFirst.current = false;
+  }, [stored, setTheme]);
+
+  return null;
+}
+```

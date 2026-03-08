@@ -1,0 +1,171 @@
+---
+title: Troubleshooting
+description: Common issues, causes, and solutions.
+---
+
+## iOS picker flickering
+
+**Symptom:** On iOS, a theme picker with highlighted buttons flickers during the
+cross-fade — the selection indicator alternates between old and new positions.
+
+**Cause:** Calling `setSelected()` and `setTheme()` in the same event handler doesn't
+give React enough time to paint the selection before the screenshot captures.
+
+**Fix:** Use `useTheme({ initialSelection })`:
+
+```tsx
+const { selected, select, colors, isTransitioning } =
+  useTheme({ initialSelection: 'system' });
+
+<Pressable onPress={() => select(option)} disabled={isTransitioning}>
+```
+
+See [Theme Picker example](/docs/examples/theme-picker) for the complete pattern.
+
+---
+
+## Native Switch flickers
+
+**Symptom:** On iOS, a native `<Switch>` thumb appears mid-slide in the screenshot.
+
+**Cause:** iOS's UISwitch runs a ~250ms Core Animation with no completion callback.
+`react-native-view-shot` captures the on-screen visual state including the thumb mid-slide.
+
+**Fix:** Use a [custom toggle](/docs/examples/theme-toggle) with `useTheme({})` and
+plain React styles (no Reanimated).
+
+---
+
+## Overlay stays visible / app seems frozen
+
+**Symptom:** The screen appears frozen — touches don't work.
+
+**Check:**
+- Look for `[react-native-theme-transition] Failed to capture screenshot` in the console
+- Verify `react-native-view-shot` is properly installed (`npx expo doctor`)
+- Ensure the root `View` has `collapsable={false}` (set internally)
+
+---
+
+## Flash on theme change (no animation)
+
+**Causes:**
+
+1. **`animated: false`** — Check if you're passing `{ animated: false }` in options
+2. **Provider placement** — `ThemeTransitionProvider` must wrap the full visible tree
+3. **`react-native-view-shot` not installed** — `captureRef` throws, falls back to instant switch
+4. **Missing worklets plugin** — `react-native-worklets/plugin` must be the last plugin in `babel.config.js`
+
+**Fix:** Verify provider placement, peer dependencies, and babel config. Restart with `npx expo start -c`.
+
+---
+
+## Duplicate plugin/preset detected
+
+**Symptom:** `SyntaxError: Duplicate plugin/preset detected.`
+
+**Cause:** From **Expo SDK 55**, `babel-preset-expo` already includes `react-native-reanimated/plugin`.
+
+**Fix:** On SDK 55+, remove `'react-native-reanimated/plugin'` from your plugins:
+
+```js
+plugins: [
+  // SDK 55+: babel-preset-expo already includes reanimated/plugin
+  'react-native-worklets/plugin', // must be last
+],
+```
+
+---
+
+## Cannot find module 'babel-preset-expo'
+
+**Cause:** Expo SDK 55 blank templates no longer include `babel-preset-expo` as a dependency.
+
+**Fix:**
+
+```bash
+npx expo install babel-preset-expo
+```
+
+---
+
+## System theme not following OS
+
+**Causes:**
+
+1. **System mode not activated** — Verify `initialTheme="system"` or `setTheme('system')`
+2. **Manual setTheme overrides** — `setTheme('dark')` exits system mode
+3. **Missing `systemThemeMap`** — Required for custom theme names
+4. **iOS Simulator** — Use `Cmd+Shift+A` to toggle appearance
+
+---
+
+## Type errors on colors
+
+**Symptom:** `Property 'myToken' does not exist on type '{ ... }'`
+
+**Fix:** Ensure all themes share identical keys:
+
+```ts
+const light = { bg: '#fff', text: '#000' };
+const dark: Record<keyof typeof light, string> = { bg: '#000', text: '#fff' };
+```
+
+---
+
+## Theme changes but no animation plays
+
+**Causes:**
+
+1. **`duration: 0`** — Set a positive duration
+2. **`animated: false`** — Check all `setTheme` call sites
+3. **System-driven in background** — Background changes use instant switch by design
+4. **Bridge firing on mount** — Normal behavior for first load
+
+---
+
+## setTheme does nothing
+
+**Causes:**
+
+1. **Same theme** — `setTheme('dark')` when already dark returns `false`
+2. **During transition** — Returns `false`, system mode is **not** activated. Retry after `isTransitioning` becomes `false`
+3. **System mode dedup** — `setTheme('system')` when OS-resolved matches current activates system mode but no visual change
+
+---
+
+## Double transition on app start
+
+**Cause:** `initialTheme` resolves to one theme, then a bridge fires `setTheme` with a different stored preference.
+
+**Fix:** Pass the stored preference as `initialTheme`:
+
+```tsx
+import { useThemeStore } from '@/stores/theme-store';
+
+const colorMode = useThemeStore((s) => s.colorMode);
+<ThemeTransitionProvider initialTheme={colorMode}>
+```
+
+---
+
+## Android: capture returns blank
+
+**Causes:**
+
+1. **`collapsable` not set** — The root View needs `collapsable={false}` (set internally)
+2. **Hardware acceleration issues** — The library falls back to instant switch automatically
+3. **View not fully rendered** — The library waits frames before capture to prevent this
+
+---
+
+## Error messages reference
+
+| Error | Cause |
+|---|---|
+| `themes must contain at least one theme` | Empty `themes` object |
+| `"system" is a reserved name` | Theme named `'system'` — rename it |
+| `different token keys` | Theme keys don't match across themes |
+| `systemThemeMap maps to non-existent theme` | Typo in `systemThemeMap` values |
+| `initialTheme resolved to non-existent theme` | `'system'` + custom names without `systemThemeMap` |
+| `useTheme must be used inside a ThemeTransitionProvider` | Hook called outside provider tree |

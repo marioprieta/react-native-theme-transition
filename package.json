@@ -1,0 +1,87 @@
+{
+  "name": "react-native-theme-transition",
+  "version": "1.0.0",
+  "description": "Smooth, animated theme and dark mode transitions for React Native. Expo Go compatible, 100% JS, powered by Reanimated.",
+  "source": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "react-native": "./src/index.ts",
+  "exports": {
+    ".": {
+      "react-native": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE",
+    "!**/__tests__",
+    "!**/.*"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "release": "npm publish --provenance --access public --dry-run"
+  },
+  "keywords": [
+    "react-native",
+    "react",
+    "ios",
+    "android",
+    "theme",
+    "theming",
+    "dark-mode",
+    "light-mode",
+    "switch",
+    "toggle",
+    "appearance",
+    "design-system",
+    "animation",
+    "transition",
+    "view-transition",
+    "react-native-reanimated",
+    "reanimated",
+    "screenshot",
+    "overlay",
+    "expo",
+    "expo-go",
+    "fabric",
+    "new-architecture",
+    "ui"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marioprieta/react-native-theme-transition.git"
+  },
+  "bugs": {
+    "url": "https://github.com/marioprieta/react-native-theme-transition/issues"
+  },
+  "homepage": "https://react-native-theme-transition.vercel.app",
+  "author": "Mario Prieta",
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-native": ">=0.76.0",
+    "react-native-reanimated": ">=4.0.0",
+    "react-native-view-shot": ">=3.0.0",
+    "react-native-worklets": ">=0.5.0"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.30.0",
+    "@types/react": "~19.2.2",
+    "react": "19.2.0",
+    "react-native": "0.83.2",
+    "react-native-reanimated": "4.2.1",
+    "react-native-view-shot": "4.0.3",
+    "react-native-worklets": "0.7.2",
+    "typescript": "~5.9.2"
+  }
+}

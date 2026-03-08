@@ -1,0 +1,167 @@
+---
+title: State Managers
+description: Bridge pattern for Zustand, Redux, and MMKV.
+---
+
+The library owns animated transition state internally. External state managers
+drive it via `setTheme` calls from a **bridge component**.
+
+## The bridge pattern
+
+```tsx
+import { useEffect } from 'react';
+import { useTheme } from '@/lib/theme';
+
+function ThemeBridge() {
+  const externalTheme = /* read from your state manager */;
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme(externalTheme);
+  }, [externalTheme, setTheme]);
+
+  return null;
+}
+```
+
+Place inside `ThemeTransitionProvider`, before other children.
+
+## Zustand
+
+### Store
+
+```ts title="stores/theme-store.ts"
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export type ColorMode = 'system' | 'light' | 'dark';
+
+interface ThemeState {
+  colorMode: ColorMode;
+  setColorMode: (mode: ColorMode) => void;
+}
+
+export const useThemeStore = create<ThemeState>()(
+  persist(
+    (set) => ({
+      colorMode: 'system',
+      setColorMode: (mode) => set({ colorMode: mode }),
+    }),
+    {
+      name: 'theme-store',
+      storage: createJSONStorage(() => AsyncStorage),
+    },
+  ),
+);
+```
+
+### Root layout
+
+```tsx title="app/_layout.tsx"
+import { useEffect } from 'react';
+import { ThemeTransitionProvider, useTheme } from '@/lib/theme';
+import { useThemeStore } from '@/stores/theme-store';
+
+export default function RootLayout() {
+  const colorMode = useThemeStore((s) => s.colorMode);
+
+  return (
+    <ThemeTransitionProvider initialTheme={colorMode}>
+      <ThemeBridge />
+      <App />
+    </ThemeTransitionProvider>
+  );
+}
+
+function ThemeBridge() {
+  const colorMode = useThemeStore((s) => s.colorMode);
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme(colorMode);
+  }, [colorMode, setTheme]);
+
+  return null;
+}
+```
+
+### Settings screen
+
+```tsx
+import { Button } from 'react-native';
+import { useThemeStore } from '@/stores/theme-store';
+
+function ThemeSettings() {
+  const setColorMode = useThemeStore((s) => s.setColorMode);
+
+  // Change Zustand → bridge fires → animated transition
+  return (
+    <>
+      <Button title="Light"  onPress={() => setColorMode('light')} />
+      <Button title="Dark"   onPress={() => setColorMode('dark')} />
+      <Button title="System" onPress={() => setColorMode('system')} />
+    </>
+  );
+}
+```
+
+## Redux / Redux Toolkit
+
+Same bridge pattern, different selector:
+
+```tsx
+import { useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { useTheme } from '@/lib/theme';
+
+function ThemeBridge() {
+  const colorMode = useSelector((state: RootState) => state.theme.colorMode);
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme(colorMode);
+  }, [colorMode, setTheme]);
+
+  return null;
+}
+```
+
+Redux Provider must wrap `ThemeTransitionProvider`:
+
+```tsx
+<Provider store={store}>
+  <ThemeTransitionProvider initialTheme={store.getState().theme.colorMode}>
+    <ThemeBridge />
+    <App />
+  </ThemeTransitionProvider>
+</Provider>
+```
+
+## MMKV
+
+```ts title="hooks/useStoredTheme.ts"
+import { useMMKVString } from 'react-native-mmkv';
+
+export function useStoredTheme() {
+  const [value, setValue] = useMMKVString('colorMode');
+  const colorMode = (value ?? 'system') as 'system' | 'light' | 'dark';
+  return { colorMode, setColorMode: setValue };
+}
+```
+
+```tsx
+import { useEffect } from 'react';
+import { useTheme } from '@/lib/theme';
+
+function ThemeBridge() {
+  const { colorMode } = useStoredTheme();
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme(colorMode);
+  }, [colorMode, setTheme]);
+
+  return null;
+}
+```

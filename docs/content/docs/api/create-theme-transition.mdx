@@ -1,0 +1,84 @@
+---
+title: createThemeTransition
+description: Factory function that creates a typed theme transition system from your theme definitions.
+---
+
+Validates configuration at initialization and returns a self-contained
+`{ ThemeTransitionProvider, useTheme }` API. No singletons — multiple
+theme scopes can coexist.
+
+TypeScript infers theme names and color tokens from the `themes` object.
+No manual generics needed.
+
+```ts
+const { ThemeTransitionProvider, useTheme } =
+  createThemeTransition({
+    themes: { light, dark },
+    duration: 350,
+    onTransitionStart: (name) => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+    onThemeChange: (name) => analytics.track('theme_switch', { theme: name }),
+  });
+```
+
+## Config
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. The name `'system'` is reserved. |
+| `duration` | `number` | `350` | Cross-fade animation duration in milliseconds. |
+| `systemThemeMap` | `{ light: Name, dark: Name }` | — | Maps OS appearance to theme names. Required when your themes are not named `'light'`/`'dark'` and you want system mode. |
+| `onTransitionStart` | `(name: Name) => void` | — | Called when an animated transition begins, before screenshot capture. Does not fire for instant switches. |
+| `onTransitionEnd` | `(name: Name) => void` | — | Called after an animated transition completes. Does not fire for instant switches or capture failures. |
+| `onThemeChange` | `(name: Name) => void` | — | Called on every theme change — animated, instant, or system-driven. The only callback guaranteed to fire. |
+
+### Theme definitions
+
+Every theme must share the exact same token keys. Mismatched keys throw at initialization.
+
+```ts
+const light = { bg: '#fff', text: '#000', primary: '#007AFF' };
+
+// Type-safe enforcement of matching keys on secondary themes:
+const dark: Record<keyof typeof light, string> = {
+  bg: '#000', text: '#fff', primary: '#0A84FF',
+};
+```
+
+Rules:
+- At least one theme required
+- `'system'` is reserved — cannot be a theme key
+- Keys must be identical across all themes (order doesn't matter)
+
+### System theme mapping
+
+Maps OS appearance (`'light'` / `'dark'`) to your theme names. Required when themes
+aren't named `'light'`/`'dark'` and you want system mode.
+
+```ts
+createThemeTransition({
+  themes: { sunrise, midnight, ocean },
+  systemThemeMap: { light: 'sunrise', dark: 'midnight' },
+});
+```
+
+Both `light` and `dark` must be provided. Values must reference existing theme names.
+
+## Type inference
+
+You never need to pass generic types manually:
+
+```ts
+const light = { background: '#fff', text: '#000' };
+const dark  = { background: '#000', text: '#fff' };
+
+const { useTheme } = createThemeTransition({ themes: { light, dark } });
+
+const { colors, name, setTheme } = useTheme();
+
+colors.background  // type: string, autocomplete: 'background' | 'text'
+colors.foo         // TypeScript error
+name               // type: 'light' | 'dark'
+setTheme('dark')   // ok
+setTheme('ocean')  // TypeScript error
+setTheme('system') // always valid
+```
