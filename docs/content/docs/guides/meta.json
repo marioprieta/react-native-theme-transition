@@ -1,0 +1,9 @@
+{
+  "title": "Guides",
+
+  "pages": [
+    "how-it-works",
+    "callbacks",
+    "troubleshooting"
+  ]
+}
