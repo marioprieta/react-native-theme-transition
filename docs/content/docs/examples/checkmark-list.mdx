@@ -1,0 +1,65 @@
+---
+title: Checkmark List
+description: iOS Settings-style list picker with checkmark indicators.
+---
+
+An iOS Settings-style list where the selected theme shows a checkmark.
+Uses `useTheme({ initialSelection })` for flicker-free selection and system mode support.
+
+```tsx
+import { View, Text, Pressable } from 'react-native';
+import { useTheme } from '@/lib/theme';
+
+const OPTIONS = ['system', 'light', 'dark'] as const;
+const LABELS = { system: 'System', light: 'Light', dark: 'Dark' };
+
+export function ThemeList() {
+  const { selected, select, colors, isTransitioning } =
+    useTheme({ initialSelection: 'system' });
+
+  return (
+    <View
+      style={{
+        backgroundColor: colors.card,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        overflow: 'hidden',
+      }}
+    >
+      {OPTIONS.map((option, i) => (
+        <Pressable
+          key={option}
+          onPress={() => select(option)}
+          disabled={isTransitioning}
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingVertical: 13,
+            paddingHorizontal: 16,
+            borderBottomWidth: i < OPTIONS.length - 1 ? 1 : 0,
+            borderBottomColor: colors.border,
+          }}
+        >
+          <Text style={{ fontSize: 16, color: colors.text }}>
+            {LABELS[option]}
+          </Text>
+          {option === selected && (
+            <Text style={{ fontSize: 17, color: colors.primary, fontWeight: '600' }}>
+              ✓
+            </Text>
+          )}
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+```
+
+## Key points
+
+- `useTheme({ initialSelection: 'system' })` — starts with "System" checked
+- The checkmark is a selection indicator, so it needs `select()` — not direct `setTheme`
+- `select()` updates the checkmark position before the screenshot capture
+- `isTransitioning` disables the list during cross-fade

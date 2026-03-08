@@ -1,0 +1,17 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "getting-started",
+    "quick-start",
+    "---API---",
+    "api",
+    "---Examples---",
+    "examples",
+    "---Recipes---",
+    "recipes",
+    "---Guides---",
+    "guides",
+    "types"
+  ]
+}

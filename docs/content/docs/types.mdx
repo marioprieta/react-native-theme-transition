@@ -1,0 +1,119 @@
+---
+title: Exported Types
+description: All TypeScript types available as named imports.
+---
+
+```ts
+import type {
+  ThemeDefinition,
+  ThemeTransitionConfig,
+  ThemeTransitionAPI,
+  UseThemeResult,
+  ThemeSelectionResult,
+  SystemThemeMap,
+  SetThemeOptions,
+  ThemeNames,
+  TokenNames,
+} from 'react-native-theme-transition';
+```
+
+## Types
+
+### `ThemeDefinition`
+
+```ts
+type ThemeDefinition = Record<string, string>;
+```
+
+A flat record where keys are token names and values are color strings.
+
+### `ThemeNames<T>`
+
+```ts
+type ThemeNames<T extends Record<string, ThemeDefinition>> = keyof T & string;
+```
+
+Union of theme name strings from your theme map.
+
+### `TokenNames<T>`
+
+```ts
+type TokenNames<T extends Record<string, ThemeDefinition>> =
+  keyof T[ThemeNames<T>] & string;
+```
+
+Union of token name strings shared across all themes.
+
+### `SystemThemeMap<Names>`
+
+```ts
+type SystemThemeMap<Names extends string> = Record<'light' | 'dark', Names>;
+```
+
+Maps OS color schemes to theme names. Both keys required.
+
+### `ThemeTransitionConfig<T>`
+
+Configuration for `createThemeTransition`. See [API Reference](/docs/api/create-theme-transition).
+
+| Field | Type | Description |
+|---|---|---|
+| `themes` | `T` | All themes keyed by name |
+| `duration` | `number?` | Cross-fade duration (default 350) |
+| `darkThemes` | `ThemeNames<T>[]?` | Themes using dark color scheme for native UI sync |
+| `systemThemeMap` | `SystemThemeMap?` | OS appearance mapping |
+| `onTransitionStart` | `(name) => void` | Animated transition start |
+| `onTransitionEnd` | `(name) => void` | Animated transition end |
+| `onThemeChange` | `(name) => void` | Any theme change |
+
+### `ThemeTransitionAPI<T>`
+
+Return type of `createThemeTransition`. Contains `ThemeTransitionProvider` and `useTheme`.
+
+### `UseThemeResult<Tokens, Names>`
+
+Base return type of `useTheme()`.
+
+| Field | Type | Description |
+|---|---|---|
+| `colors` | `Record<Tokens, string>` | Current color values |
+| `name` | `Names` | Active theme name (never `'system'`) |
+| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger transition |
+| `isTransitioning` | `boolean` | Cross-fade in progress |
+
+### `ThemeSelectionResult<Names>`
+
+Extra fields returned by `useTheme({ initialSelection })`.
+
+| Field | Type | Description |
+|---|---|---|
+| `selected` | `Names \| 'system'` | Currently selected option |
+| `select` | `(option) => void` | Select with transition-safe timing |
+
+### `SetThemeOptions<Names>`
+
+Options for `setTheme`.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `animated` | `boolean` | `true` | Use animation |
+| `onTransitionStart` | `(name) => void` | — | Per-call start callback |
+| `onTransitionEnd` | `(name) => void` | — | Per-call end callback |
+
+## Type inference example
+
+```ts
+const light = { bg: '#fff', text: '#000' };
+const dark  = { bg: '#000', text: '#fff' };
+
+const api = createThemeTransition({ themes: { light, dark } });
+
+const { colors, name, setTheme } = api.useTheme();
+
+colors.bg         // type: string, autocomplete: 'bg' | 'text'
+colors.foo        // TypeScript error
+name              // type: 'light' | 'dark'
+setTheme('dark')  // ok
+setTheme('ocean') // TypeScript error
+setTheme('system')// always valid
+```

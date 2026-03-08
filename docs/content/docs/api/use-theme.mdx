@@ -1,0 +1,131 @@
+---
+title: useTheme
+description: Hook returning the current theme state, transition controls, and optional selection tracking.
+---
+
+Returns the current theme state and a function to trigger transitions.
+Throws if called outside a `ThemeTransitionProvider`.
+
+## Basic usage
+
+```ts
+const { colors, name, setTheme, isTransitioning } = useTheme();
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `colors` | `{ [token]: string }` | Current theme's color values, fully typed to your token names. |
+| `name` | `ThemeName` | Active theme name (resolved, never `'system'`). |
+| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger transition or enter system mode. Returns `true` if accepted, `false` if rejected. |
+| `isTransitioning` | `boolean` | `true` from after the screenshot is captured until the fade ends. |
+
+### Color tokens
+
+Fully typed to your token names. TypeScript provides autocomplete:
+
+```ts
+colors.background  // autocomplete works
+colors.foo         // TypeScript error
+```
+
+### Active theme name
+
+Always the resolved theme name, never `'system'`. Even in system mode, `name` returns
+the actual theme (`'light'` or `'dark'`, or whatever `systemThemeMap` resolves to).
+
+### Transition state
+
+`true` from after the screenshot is captured until the fade completes. Touch input
+is blocked immediately when `setTheme` is called, regardless of this flag.
+Use it to:
+- Disable toggle buttons (`disabled={isTransitioning}`)
+- Defer expensive renders
+- Show loading indicators
+
+## Changing themes
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | `ThemeName \| 'system'` | Target theme or system mode |
+| `options` | `SetThemeOptions` | Optional transition configuration |
+
+### Transition options
+
+| Option | Default | Description |
+|---|---|---|
+| `animated` | `true` | `false` for instant switch, no screenshot or animation |
+| `onTransitionStart` | — | Fires after config-level callback, animated only |
+| `onTransitionEnd` | — | Fires after config-level callback, animated only |
+
+```ts
+setTheme('dark', {
+  onTransitionStart: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+});
+```
+
+### Behavior rules
+
+1. **Same theme** — returns `false` (no-op)
+2. **During transition** — returns `false` (no queue, no error). System mode is **not** activated even if `'system'` was passed — retry after `isTransitioning` becomes `false`
+3. **`'system'`** — enters system-following mode, subscribes to OS changes
+4. **Explicit name** — exits system-following mode
+5. **`animated: false`** — instant switch, only `onThemeChange` fires
+6. **Capture failure** — falls back to instant switch, `onTransitionEnd` skipped
+
+---
+
+## Selection tracking
+
+When building theme selection UIs (button groups, toggles, checkmark lists),
+pass an options object to activate **selection tracking** with transition-safe timing.
+
+```ts
+const { colors, name, setTheme, isTransitioning, selected, select } =
+  useTheme({ initialSelection: 'system' });
+```
+
+| Extra property | Type | Description |
+|---|---|---|
+| `selected` | `ThemeName \| 'system'` | Currently selected option (may be `'system'`). |
+| `select` | `(option) => void` | Select a theme with transition-safe timing. |
+
+### Initial selection value
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `initialSelection` | `ThemeName \| 'system'` | current theme name | Starting value for `selected` (read once) |
+
+`initialSelection` seeds the initial `selected` state. When omitted, defaults to the
+current theme name from context.
+
+### Transition-safe timing
+
+On iOS 120Hz displays, calling `setSelected()` and `setTheme()` in the same event
+handler doesn't give React enough time to paint the selection before the library
+captures the screenshot. `select` solves this by:
+
+1. Updating the selection state immediately
+2. Deferring `setTheme` by one `requestAnimationFrame`
+3. Using an internal press lock ref to prevent rapid presses during transitions
+
+### When to use which
+
+<Callout type="info">
+  If your component has a visual indicator that changes on theme switch (highlighted
+  button, toggle thumb, checkmark), use `useTheme({})` or `useTheme({ initialSelection })`.
+  If your component just reads colors or has a static label, plain `useTheme()` is sufficient.
+</Callout>
+
+| Scenario | Call |
+|---|---|
+| Segmented picker with system option | `useTheme({ initialSelection: 'system' })` |
+| Dark mode toggle | `useTheme({})` — defaults to current theme |
+| Checkmark list with system | `useTheme({ initialSelection: 'system' })` |
+| Static "Switch theme" button | `useTheme()` — no selection tracking needed |
+
+### Local state caveat
+
+`selected` is managed locally inside the hook. If the theme changes externally — via a bridge
+component calling `setTheme`, or a system appearance change — the context `name` updates but
+`selected` does not. Use `name` for display and `selected` only for the highlight state if
+you need to stay in sync with external changes.

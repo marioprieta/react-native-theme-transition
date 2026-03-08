@@ -1,0 +1,92 @@
+---
+title: Theme Picker
+description: Segmented control with selection tracking and iOS-safe timing.
+---
+
+A horizontal segmented control where the active theme is highlighted.
+Uses `useTheme({ initialSelection })` for flicker-free selection and
+rapid-press protection.
+
+```tsx
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable } from 'react-native';
+import { useTheme } from '@/lib/theme';
+
+const OPTIONS = ['system', 'light', 'dark'] as const;
+
+export function ThemePicker() {
+  const { selected, select, colors, isTransitioning } =
+    useTheme({ initialSelection: 'system' });
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {OPTIONS.map((option) => (
+        <Pressable
+          key={option}
+          onPress={() => select(option)}
+          disabled={isTransitioning}
+          style={{
+            flex: 1,
+            padding: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            backgroundColor:
+              option === selected ? colors.primary : 'transparent',
+          }}
+        >
+          <Text
+            style={{
+              color: option === selected ? '#fff' : colors.text,
+            }}
+          >
+            {option}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+```
+
+## Key points
+
+- `useTheme({ initialSelection: 'system' })` — starts with "system" highlighted
+- `select(option)` updates the highlight **before** the screenshot, then defers `setTheme` by one `requestAnimationFrame`
+- `isTransitioning` disables all buttons during the cross-fade
+- Plain `style={{...}}` — no Reanimated, no `({ pressed }) => ...`
+
+## Why not call `setTheme` directly?
+
+On iOS 120Hz displays, calling `setSelected()` and `setTheme()` in the same event
+handler doesn't give React enough time to paint the selection change before the
+library captures the screenshot. The screenshot captures the old highlight, the real UI
+shows the new one, and the cross-fade blends both — producing visible flickering.
+
+`select()` handles this automatically. See [Troubleshooting: iOS picker flickering](/docs/guides/troubleshooting#ios-picker-flickering) for details.
+
+## Manual alternative
+
+If you need full control, use `setTheme` with `requestAnimationFrame`:
+
+```tsx
+const { colors, setTheme, isTransitioning } = useTheme();
+const [selected, setSelected] = useState('system');
+const lockRef = useRef(false);
+
+useEffect(() => {
+  if (!isTransitioning) lockRef.current = false;
+}, [isTransitioning]);
+
+const onSelect = useCallback(
+  (option: string) => {
+    if (lockRef.current) return;
+    lockRef.current = true;
+    setSelected(option);
+    requestAnimationFrame(() => {
+      if (setTheme(option)) return;
+      lockRef.current = false;
+    });
+  },
+  [setTheme],
+);
+```
