@@ -1,0 +1,11 @@
+{
+  "title": "Recipes",
+
+  "pages": [
+    "persistence",
+    "zustand",
+    "expo-router",
+    "haptic-feedback",
+    "migration"
+  ]
+}

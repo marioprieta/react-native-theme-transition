@@ -1,0 +1,86 @@
+---
+title: Theme Toggle
+description: Custom switch component for light/dark toggling with transition-safe timing.
+---
+
+A custom toggle switch that replaces the native `<Switch>` component.
+
+<Callout type="warn">
+  **Do not use the native `<Switch>` for theme toggling.** iOS's UISwitch runs
+  a ~250ms Core Animation with no completion callback. The screenshot captures
+  the thumb mid-slide, causing visible flickering. See
+  [Troubleshooting](/docs/guides/troubleshooting#native-switch-flickers) for details.
+</Callout>
+
+```tsx
+import { View, Text, Pressable } from 'react-native';
+import { useTheme } from '@/lib/theme';
+
+const TRACK_W = 50;
+const TRACK_H = 30;
+const THUMB = 26;
+const PAD = 2;
+const MAX_TX = TRACK_W - THUMB - PAD * 2;
+
+export function ThemeToggle() {
+  const { selected, select, colors, isTransitioning } = useTheme({});
+  const isDark = selected === 'dark';
+
+  return (
+    <Pressable
+      onPress={() => select(isDark ? 'light' : 'dark')}
+      disabled={isTransitioning}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: colors.card,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <Text style={{ fontSize: 16, color: colors.text }}>Dark Mode</Text>
+      <View
+        style={{
+          width: TRACK_W, height: TRACK_H,
+          borderRadius: TRACK_H / 2, padding: PAD,
+          justifyContent: 'center',
+          backgroundColor: isDark ? colors.primary : colors.border,
+        }}
+      >
+        <View
+          style={{
+            width: THUMB, height: THUMB, borderRadius: THUMB / 2,
+            backgroundColor: '#fff',
+            shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.2, shadowRadius: 2, elevation: 2,
+            transform: [{ translateX: isDark ? MAX_TX : 0 }],
+          }}
+        />
+      </View>
+    </Pressable>
+  );
+}
+```
+
+## Key points
+
+- `useTheme({})` — not `useTheme()`. The toggle thumb is a selection indicator, so it needs selection tracking. `useTheme({})` defaults `initialSelection` to the current theme from context.
+- **Plain React styles only** — no Reanimated for the thumb position. The visual state must update in React's commit cycle so the screenshot captures the correct position.
+- `select()` updates `selected` immediately, then defers `setTheme` by one frame.
+
+<Callout type="info">
+  **Rule of thumb:** any component whose visual state changes on theme switch
+  needs `useTheme({})`. The only component that can use `setTheme` directly is
+  a button whose content doesn't change (e.g., a plain "Switch theme" label).
+</Callout>
+
+## Why plain styles, not Reanimated?
+
+Reanimated's `useAnimatedStyle` + `useEffect` → `sharedValue` adds 1+ frames of
+latency (JS → UI thread). The screenshot capture can fire before the native view
+updates. Plain styles update in the same React commit as `select`, matching the
+pattern that works for the picker and checkmark list.

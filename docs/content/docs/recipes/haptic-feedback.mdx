@@ -1,0 +1,89 @@
+---
+title: Haptic Feedback & Analytics
+description: Add haptic feedback and analytics tracking to theme transitions.
+---
+
+## Haptic feedback
+
+### On every animated transition (config-level)
+
+```ts
+import * as Haptics from 'expo-haptics';
+
+export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
+  themes: { light, dark },
+  onTransitionStart: () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  },
+});
+```
+
+### On a specific button only (per-call)
+
+```tsx
+function ThemeToggle() {
+  const { name, setTheme } = useTheme();
+
+  return (
+    <Pressable onPress={() => {
+      setTheme(name === 'light' ? 'dark' : 'light', {
+        onTransitionStart: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        },
+      });
+    }}>
+      <Text>Toggle</Text>
+    </Pressable>
+  );
+}
+```
+
+## Analytics
+
+Use `onThemeChange` to track every theme change (animated, instant, system-driven):
+
+```ts
+export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
+  themes: { light, dark },
+  onThemeChange: (name) => {
+    analytics.track('theme_changed', { theme: name });
+  },
+});
+```
+
+<Callout type="info">
+  `onThemeChange` is the only callback guaranteed to fire for every theme change.
+  `onTransitionStart` and `onTransitionEnd` only fire for animated transitions.
+</Callout>
+
+## Disable UI during transitions
+
+### Disable a button
+
+```tsx
+<Pressable
+  onPress={() => setTheme('dark')}
+  disabled={isTransitioning}
+>
+  <Text>Switch theme</Text>
+</Pressable>
+```
+
+<Callout type="warn">
+  Do not change styles based on `isTransitioning` (e.g., opacity). The screenshot captures
+  the current visual state — style changes will bleed into the cross-fade.
+</Callout>
+
+### Defer expensive renders
+
+```tsx
+function HeavyChart() {
+  const { isTransitioning, colors } = useTheme();
+
+  if (isTransitioning) {
+    return <View style={{ height: 200, backgroundColor: colors.card }} />;
+  }
+
+  return <ExpensiveChartComponent colors={colors} />;
+}
+```

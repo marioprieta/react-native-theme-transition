@@ -1,0 +1,54 @@
+---
+title: Theme Button
+description: Simple cycling button that uses setTheme directly — no selection tracking needed.
+---
+
+A button that cycles through themes. Since the button's visual appearance doesn't change
+on theme switch (it just shows a static label), no selection tracking is needed.
+
+```tsx
+import { Text, Pressable } from 'react-native';
+import { useTheme } from '@/lib/theme';
+
+const CYCLE = ['light', 'dark'] as const;
+
+export function ThemeButton() {
+  const { colors, name, setTheme, isTransitioning } = useTheme();
+  const nextIndex = (CYCLE.indexOf(name as typeof CYCLE[number]) + 1) % CYCLE.length;
+
+  return (
+    <Pressable
+      onPress={() => setTheme(CYCLE[nextIndex])}
+      disabled={isTransitioning}
+      style={{
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        backgroundColor: colors.primary,
+      }}
+    >
+      <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+        Switch theme
+      </Text>
+    </Pressable>
+  );
+}
+```
+
+<Callout type="warn">
+  **Do not change styles based on `isTransitioning`** (e.g., `opacity: isTransitioning ? 0.5 : 1`).
+  The screenshot captures the current visual state — if the button is dimmed when the screenshot
+  is taken, the cross-fade will blend the dimmed state with the new theme, producing a visible flash.
+</Callout>
+
+## When to use this pattern
+
+This is the only pattern where you can call `setTheme` directly. It works because:
+
+- The button's label is static ("Switch theme") — it doesn't change before the screenshot
+- There's no visual indicator (highlight, checkmark, thumb) that needs to be updated before the screenshot
+
+<Callout type="info">
+  If you add a visual indicator to the button (e.g., a colored border on the active theme),
+  switch to `useTheme({})` and use `select()` instead.
+</Callout>
