@@ -1,0 +1,87 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@theme {
+  --color-fd-primary: #007AFF;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-ring: #007AFF;
+}
+
+.dark {
+  --color-fd-primary: #0A84FF;
+  --color-fd-ring: #0A84FF;
+}
+
+/* Always-dark code blocks */
+figure.shiki {
+  --color-fd-card: #0a0a0a;
+  --color-fd-secondary: #0a0a0a;
+  --color-fd-muted-foreground: rgba(255, 255, 255, 0.4);
+  --color-fd-accent: rgba(255, 255, 255, 0.1);
+  --color-fd-accent-foreground: rgba(255, 255, 255, 0.9);
+}
+
+.shiki:not(.not-fumadocs-codeblock *) code span {
+  color: var(--shiki-dark);
+}
+
+/* Wider sidebar on desktop */
+@media (min-width: 768px) {
+  #nd-docs-layout {
+    --fd-sidebar-width: 280px;
+  }
+}
+
+/* Clean sidebar border */
+#nd-sidebar {
+  @apply md:border-0!;
+}
+
+/* Constrain page width */
+#nd-page {
+  max-width: 1050px;
+}
+
+/* Better prose spacing */
+.prose > :not(:first-child) {
+  margin-top: 1.5em;
+}
+
+/* Callout left padding */
+.rounded-xl.border.bg-fd-card {
+  padding-inline-start: 0.5rem;
+}
+
+/* Smaller step circles */
+.fd-step::before {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.7rem;
+  inset-inline-start: calc(-0.75rem - 0.5px);
+  transform: translateY(2px);
+}
+
+.fd-steps {
+  margin-inline-start: 0.75rem;
+  padding-inline-start: 1.5rem;
+  border-inline-start: none;
+}
+
+@media (min-width: 640px) {
+  .fd-steps {
+    margin-inline-start: 0.75rem;
+    padding-inline-start: 1.5rem;
+  }
+}
+
+/* TOC left bar */
+#nd-toc .border-s {
+  border-inline-start-color: var(--color-fd-border);
+}
+
+/* Mermaid diagram container */
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}

@@ -1,0 +1,96 @@
+---
+title: Quick Start
+description: Define themes, wrap your app, and start using theme colors in three steps.
+---
+
+## Setup
+
+<Steps>
+  <Step>
+    ### Define your themes
+
+    Create a single file that defines your themes and exports the API.
+    TypeScript infers theme names and color tokens automatically.
+
+    ```ts title="src/lib/theme.ts"
+    import { createThemeTransition } from 'react-native-theme-transition';
+
+    const light = {
+      background: '#ffffff',
+      card:       '#f5f5f5',
+      text:       '#000000',
+      border:     '#e0e0e0',
+      primary:    '#007AFF',
+      notification: '#ff3b30',
+    };
+
+    const dark: Record<keyof typeof light, string> = {
+      background: '#000000',
+      card:       '#1c1c1e',
+      text:       '#ffffff',
+      border:     '#333333',
+      primary:    '#0A84FF',
+      notification: '#ff453a',
+    };
+
+    export const { ThemeTransitionProvider, useTheme } =
+      createThemeTransition({
+        themes: { light, dark },
+      });
+
+    // TypeScript infers everything:
+    // - Theme names: 'light' | 'dark'
+    // - Color tokens: 'background' | 'card' | 'text' | 'border' | 'primary' | 'notification'
+    ```
+  </Step>
+  <Step>
+    ### Wrap your app
+
+    Place `ThemeTransitionProvider` as high as possible — above navigation,
+    above modals. The screenshot captures everything inside the provider.
+
+    ```tsx title="app/_layout.tsx"
+    import { ThemeTransitionProvider } from '@/lib/theme';
+
+    export default function RootLayout() {
+      return (
+        <ThemeTransitionProvider initialTheme="system">
+          <App />
+        </ThemeTransitionProvider>
+      );
+    }
+    ```
+  </Step>
+  <Step>
+    ### Use in components
+
+    Call `useTheme()` to read colors, get the current theme name, and trigger transitions.
+
+    ```tsx title="app/index.tsx"
+    import { useTheme } from '@/lib/theme';
+
+    function MyScreen() {
+      const { colors, name, setTheme, isTransitioning } = useTheme();
+
+      return (
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <Text style={{ color: colors.text }}>Current: {name}</Text>
+          <Pressable
+            onPress={() => setTheme(name === 'light' ? 'dark' : 'light')}
+            disabled={isTransitioning}
+          >
+            <Text style={{ color: colors.primary }}>Toggle theme</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    ```
+  </Step>
+</Steps>
+
+## What's next?
+
+- [API Reference](/docs/api/create-theme-transition) — full configuration options
+- [Theme Picker example](/docs/examples/theme-picker) — segmented control with selection tracking
+- [System Theme](/docs/examples/system-theme) — follow OS appearance automatically
+- [Expo Router integration](/docs/recipes/expo-router) — typed navigation colors
