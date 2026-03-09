@@ -1,15 +1,15 @@
-<h1 align="center">react-native-theme-transition</h1>
+<h1 align="center">React Native Theme Transition</h1>
 
 <p align="center">
   Smooth, animated theme transitions for React Native. Expo Go compatible, powered by Reanimated.
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/react-native-theme-transition"><img src="https://img.shields.io/npm/v/react-native-theme-transition.svg" alt="npm version" /></a>
-  <a href="https://bundlephobia.com/package/react-native-theme-transition"><img src="https://img.shields.io/bundlephobia/minzip/react-native-theme-transition" alt="bundle size" /></a>
+  <a href="https://www.npmjs.com/package/react-native-theme-transition"><img src="https://img.shields.io/npm/v/react-native-theme-transition.svg?t=1" alt="npm version" /></a>
+  <a href="https://bundlephobia.com/package/react-native-theme-transition"><img src="https://img.shields.io/badge/minzip-2.5%20kB-brightgreen" alt="bundle size" /></a>
   <img src="https://img.shields.io/badge/Expo_Go-compatible-000.svg?logo=expo&logoColor=white" alt="expo compatible" />
-  <img src="https://img.shields.io/badge/React_Compiler-compatible-blue.svg" alt="react compiler" />
-  <a href="https://github.com/marioprieta/react-native-theme-transition/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/react-native-theme-transition" alt="license" /></a>
+  <img src="https://img.shields.io/badge/React_Compiler-compatible-blueviolet.svg" alt="react compiler" />
+  <a href="https://github.com/marioprieta/react-native-theme-transition/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/react-native-theme-transition?t=1" alt="license" /></a>
 </p>
 
 <table align="center">
@@ -23,6 +23,10 @@
   </tr>
 </table>
 
+<p align="center">
+  <a href="https://github.com/marioprieta/react-native-theme-transition#readme"><b>See demo videos on GitHub</b></a>
+</p>
+
 ## Features
 
 - **Smooth cross-fade transitions** — powered by Reanimated on the native UI thread (60-120 FPS)
@@ -32,7 +36,7 @@
 - **Native UI sync** — alerts, keyboards, and date pickers automatically match your active theme
 - **Transition safe** — blocks concurrent transitions and exposes `isTransitioning`
 - **React Compiler ready** — all hooks follow the [Rules of React](https://react.dev/reference/rules)
-- **Lightweight** — zero runtime dependencies
+- **Lightweight** — ~2.5 kB gzipped, zero runtime dependencies
 
 ## Documentation
 
