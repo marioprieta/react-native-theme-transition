@@ -19,10 +19,10 @@
   </tr>
   <tr>
     <td>
-      <video src="https://github.com/user-attachments/assets/449220b3-50b1-417e-b2c3-13d815d575d7" width="260" autoplay loop muted playsinline></video>
+      <img src="https://raw.githubusercontent.com/marioprieta/react-native-theme-transition/main/assets/videos/iOS_demo.gif" width="260" alt="iOS demo" />
     </td>
     <td>
-      <video src="https://github.com/user-attachments/assets/9c55de09-41d2-4581-9463-eb315156dca3" width="260" autoplay loop muted playsinline></video>
+      <img src="https://raw.githubusercontent.com/marioprieta/react-native-theme-transition/main/assets/videos/Android_demo.gif" width="260" alt="Android demo" />
     </td>
   </tr>
 </table>

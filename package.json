@@ -28,8 +28,11 @@
   "scripts": {
     "prebuild": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc",
+    "prepack": "cp README.npm.md README.md",
+    "postpack": "git checkout README.md",
     "prepublishOnly": "npm run build",
-    "release": "npm publish --provenance --access public --dry-run"
+    "release": "npm publish --provenance --access public",
+    "release:dry": "npm publish --provenance --access public --dry-run"
   },
   "keywords": [
     "react-native",
