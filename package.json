@@ -1,6 +1,6 @@
 {
   "name": "react-native-theme-transition",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "Smooth, animated theme and dark mode transitions for React Native. Expo Go compatible, powered by Reanimated.",
   "source": "./src/index.ts",
   "main": "./dist/index.js",
