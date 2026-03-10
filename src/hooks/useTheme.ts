@@ -34,14 +34,12 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
 
     const { setTheme, isTransitioning } = ctx;
 
-    // Selection state — hooks are always called to satisfy React's rules of hooks.
-    // Only exposed in the return value when options are provided.
+    // Always called (rules of hooks) — only exposed when options are provided.
     const [selected, setSelected] = useState<Names | 'system'>(
       () => options?.initialSelection ?? ctx.name,
     );
     const pressLockRef = useRef(false);
-    // Ref tracks latest `selected` so the callback can read it without
-    // `selected` being a dependency — avoids recreating `select` on every change.
+    // Ref avoids `selected` as a dependency — keeps `select` stable across renders.
     const selectedRef = useRef(selected);
     selectedRef.current = selected;
 
@@ -54,25 +52,16 @@ export function createUseTheme<T extends Record<string, ThemeDefinition>>(
         if (pressLockRef.current) return;
         pressLockRef.current = true;
         const previousSelected = selectedRef.current;
-        // Paint the new highlight FIRST. Deferring setTheme to the next frame
-        // guarantees React commits + native paint before the library captures.
+        // Paint highlight first — deferred setTheme lets React commit before capture.
         setSelected(option);
         requestAnimationFrame(() => {
-          if (!setTheme(option)) {
-            // Rejected (same theme or already transitioning) — restore the prior selection.
-            setSelected(previousSelected);
-          }
-          // Always release: the blocker view (isBlocking) handles touch
-          // prevention during transitions at the native level.
+          if (!setTheme(option)) setSelected(previousSelected);
           pressLockRef.current = false;
         });
       },
       [setTheme],
     );
 
-    // Memoize the extended result so consumers using selection tracking
-    // don't get a new object reference on every render (which would defeat
-    // the context-level useMemo in the provider).
     const selectionResult = useMemo(
       () => ({ ...ctx, selected, select }),
       [ctx, selected, select],
