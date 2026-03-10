@@ -26,13 +26,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Update npm for OIDC support
         run: npm install -g npm@latest
-
-      - name: Clear auth token for OIDC
-        run: sed -i '/_authToken/d' ~/.npmrc || true
 
       - name: Install dependencies
         run: npm ci
@@ -44,6 +40,17 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: npm publish --access public
+          publish: npm publish --access public --provenance
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create git tag and GitHub Release
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" --title "$TAG" --generate-notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
