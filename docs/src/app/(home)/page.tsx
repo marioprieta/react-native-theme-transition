@@ -12,7 +12,7 @@ export default function HomePage() {
         }}
       />
 
-      <section className="relative z-10 flex flex-col items-center gap-10 w-full max-w-2xl text-center overflow-hidden">
+      <section className="relative z-10 flex flex-col items-center gap-10 w-full max-w-2xl text-center">
         {/* Title */}
         <div className="flex flex-col items-center gap-5">
           <h1 className="text-2xl sm:text-5xl font-bold tracking-tight">
@@ -25,7 +25,7 @@ export default function HomePage() {
         </div>
 
         {/* Install snippet */}
-        <div className="w-full min-w-0 sm:max-w-md">
+        <div className="w-full min-w-0 overflow-hidden sm:max-w-md">
           <pre className="rounded-xl border border-fd-border bg-fd-card px-4 sm:px-2 py-3 sm:py-4 text-xs sm:text-sm font-mono text-left overflow-x-auto whitespace-pre">
             <span className="text-fd-muted-foreground select-none">$ </span>
             <span>npx expo install react-native-theme-transition react-native-worklets</span>
@@ -51,7 +51,7 @@ export default function HomePage() {
         </div>
 
         {/* CTA buttons */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
           <Link
             href="/docs"
             className="inline-flex items-center justify-center gap-2 rounded-full bg-fd-primary px-6 py-3 text-base font-medium text-fd-primary-foreground hover:bg-fd-primary/90 transition-colors"
