@@ -1,6 +1,11 @@
 /**
  * Screenshot-overlay transition engine and provider.
  *
+ * @remarks
+ * View hierarchy: content root → shared-value touch blocker → animated overlay
+ * with decoded screenshot `Image`. The overlay is always mounted (no mount-time
+ * race with the shared opacity value); only the `Image` inside is conditional.
+ *
  * @module
  */
 
@@ -168,14 +173,22 @@ export function createProviderAndContext<
     const [isTransitioning, setIsTransitioning] = useState(false);
 
     const systemModeRef = useRef(initialTheme === 'system');
-    // State mirror of systemModeRef — triggers the Appearance.setColorScheme effect.
+    // State mirror of systemModeRef — drives the Appearance.setColorScheme effect.
     const [isSystemMode, setIsSystemMode] = useState(initialTheme === 'system');
     const appStateRef = useRef(AppState.currentState);
-    // Stores a pending OS scheme change that arrived while a transition was
-    // running (and setTheme was rejected). Read by finishTransition.
+    // Pending OS scheme change that arrived mid-transition. Applied by finishTransition.
     const pendingSchemeRef = useRef<'light' | 'dark' | null>(null);
+    // Last observed OS scheme — lets manual→system resolve without calling
+    // setColorScheme('unspecified') (which flashes the Android status bar).
+    const lastKnownOsSchemeRef = useRef<'light' | 'dark'>(
+      normalizeScheme(Appearance.getColorScheme()),
+    );
+    // Manual override scheme while a deferred setColorScheme('unspecified') is pending.
+    // finishTransition uses this to correct the theme if the OS scheme diverged.
+    const deferredSystemRestoreRef = useRef<'light' | 'dark' | null>(null);
 
-    // Blocks touches within one native frame, without waiting for a React re-render.
+    // SharedValue (not state) so touch blocking takes effect on the native thread
+    // within one frame, without waiting for a React re-render cycle.
     const isBlocking = useSharedValue(false);
     const blockerProps = useAnimatedProps(() => ({
       pointerEvents: isBlocking.value ? 'auto' as const : 'none' as const,
@@ -184,9 +197,8 @@ export function createProviderAndContext<
     // State (not ref) so unsetting it unmounts the Image, freeing the captured bitmap.
     const [overlayUri, setOverlayUri] = useState<string | null>(null);
     const overlayOpacity = useSharedValue(0);
-    // Stable reference prevents Reanimated from re-processing the style on React re-renders.
+    // Stable ref so Reanimated doesn't re-process the style on every render.
     const overlayStyle = useMemo(() => ({ opacity: overlayOpacity }), [overlayOpacity]);
-    // Settled when the overlay Image fires onLoad (resolve) or onError (reject).
     const overlayDecodeRef = useRef<{ resolve: () => void; reject: () => void } | null>(null);
     const overlaySource = useMemo(() => overlayUri ? { uri: overlayUri } : undefined, [overlayUri]);
     const onOverlayLoad = useCallback(() => {
@@ -203,9 +215,8 @@ export function createProviderAndContext<
       };
     }, []);
 
-    // Keep native UI elements (alerts, date pickers, keyboards) in sync.
-    // Only applies in manual mode — in system mode the OS drives native UI
-    // via 'unspecified' (set once by setTheme when entering system mode).
+    // Sync native UI (alerts, keyboards) with theme. Skipped in system mode
+    // where the OS drives appearance via 'unspecified'.
     useEffect(() => {
       if (isSystemMode) return;
       if (isTransitioning) return;
@@ -219,15 +230,15 @@ export function createProviderAndContext<
       setOverlayUri(null);
     }, [isBlocking]);
 
-    const runTransition = useCallback(async (name: Names, options?: SetThemeOptions<Names>) => {
+    const runTransition = useCallback(async (initialName: Names, options?: SetThemeOptions<Names>) => {
+      let name: Names = initialName;
       try {
-        // Two frames so the JS → Shadow Tree → Native UI pipeline fully paints
-        // any pending state changes before the screenshot. useTheme({ initialSelection })
-        // adds its own requestAnimationFrame before calling setTheme, giving 3
-        // total frames — enough for React commit + native paint on 120Hz displays.
+        // 2 frames for JS → Shadow Tree → Native UI to paint before capture.
+        // useTheme's requestAnimationFrame adds a 3rd — enough for 120Hz.
         await waitFrames(2);
         if (!mountedRef.current) return;
 
+        // jpg 0.8: ~30% smaller than png, no visible degradation during a cross-fade.
         const uri = await captureRef(rootRef, { format: 'jpg', quality: 0.8 });
         if (!mountedRef.current) return;
 
@@ -242,13 +253,47 @@ export function createProviderAndContext<
         await waitFrames(1);
         if (!mountedRef.current) return;
 
-        // Deferred until the overlay covers the screen so the re-render
-        // doesn't flash state-dependent visuals before the screenshot hides them.
+        // Deferred: setting this earlier would re-render under the overlay,
+        // flashing state-dependent visuals before the screenshot hides them.
         setIsTransitioning(true);
 
         setActiveTheme({ colors: getColors(name), name });
 
-        // Wait for React to commit the new theme under the still-opaque overlay.
+        // Deferred setColorScheme('unspecified') — done now while the overlay is
+        // opaque so any theme correction (OS scheme diverged) is invisible to the user.
+        if (deferredSystemRestoreRef.current !== null) {
+          const manualScheme = deferredSystemRestoreRef.current;
+
+          let resolved = false;
+          const realScheme = await new Promise<'light' | 'dark'>((resolve) => {
+            const sub = Appearance.addChangeListener(({ colorScheme }) => {
+              if (resolved) return;
+              resolved = true;
+              sub.remove();
+              resolve(normalizeScheme(colorScheme));
+            });
+            Appearance.setColorScheme('unspecified');
+            // No event → OS scheme already matches the manual override.
+            requestAnimationFrame(() => {
+              if (resolved) return;
+              resolved = true;
+              sub.remove();
+              resolve(manualScheme);
+            });
+          });
+          if (!mountedRef.current) return;
+
+          deferredSystemRestoreRef.current = null;
+          lastKnownOsSchemeRef.current = realScheme;
+
+          const corrected = mapSchemeToTheme<Names>(realScheme, systemThemeMap);
+          if (corrected in themes && corrected !== name) {
+            name = corrected as Names;
+            targetThemeRef.current = corrected;
+            setActiveTheme({ colors: getColors(corrected), name: corrected });
+          }
+        }
+
         await waitFrames(1);
         if (!mountedRef.current) return;
 
@@ -259,8 +304,7 @@ export function createProviderAndContext<
           safeCall('per-call onTransitionEnd', options?.onTransitionEnd, name);
           safeCall('config onThemeChange', onThemeChange, name);
 
-          // Reconcile: if the OS appearance changed while the transition was
-          // running (stored in pendingSchemeRef by the listener), apply it now.
+          // Apply any OS scheme change that arrived mid-transition.
           if (systemModeRef.current && pendingSchemeRef.current !== null) {
             const resolved = mapSchemeToTheme<Names>(pendingSchemeRef.current, systemThemeMap);
             pendingSchemeRef.current = null;
@@ -291,32 +335,20 @@ export function createProviderAndContext<
     }, [overlayOpacity, resetTransition]);
 
     const setTheme = useCallback((name: Names | 'system', options?: SetThemeOptions<Names>): boolean => {
-      // When transitioning from manual to system mode, Android's getColorScheme()
-      // returns stale values synchronously after setColorScheme('unspecified').
-      // Clear the override and defer resolution by one frame so native settles.
+      // Manual→system: resolve from cached OS scheme to avoid the Android
+      // status bar flash that setColorScheme('unspecified') causes pre-overlay.
       if (name === 'system' && !systemModeRef.current) {
         if (transitioningRef.current) return false;
 
-        // Don't set systemModeRef yet — while it's false the Appearance
-        // listener guard (`!systemModeRef.current`) naturally ignores
-        // stale events Android fires after setColorScheme('unspecified').
         setIsSystemMode(true);
-        Appearance.setColorScheme('unspecified');
-
-        requestAnimationFrame(() => {
-          if (!mountedRef.current) return;
-          systemModeRef.current = true;
-          setTheme('system', options);
-        });
-        return true;
+        systemModeRef.current = true;
+        deferredSystemRestoreRef.current = schemeOf(targetThemeRef.current);
+        return setTheme('system', options);
       }
 
       const resolvedTheme = name === 'system'
-        // When Android returns 'unspecified' (override matched OS, no config change),
-        // infer the OS scheme from the current theme's darkness classification.
-        ? resolveSystemTheme<Names>(systemThemeMap, schemeOf(targetThemeRef.current))
+        ? mapSchemeToTheme<Names>(lastKnownOsSchemeRef.current, systemThemeMap)
         : name;
-
       if (!(resolvedTheme in themes)) {
         const resolutionHint = name === 'system'
           ? ' Provide `systemThemeMap` in the config to map OS appearance to your theme names.'
@@ -328,20 +360,17 @@ export function createProviderAndContext<
 
       if (transitioningRef.current) return false;
 
-      // Set system mode AFTER the transition guard so a rejected call during an ongoing
-      // transition doesn't silently activate system-following mode.
+      // After transition guard — a rejected call must not activate system mode.
       const wasSystemMode = systemModeRef.current;
       systemModeRef.current = name === 'system';
 
-      // Sync state so the Appearance.setColorScheme effect re-runs.
       if (systemModeRef.current !== wasSystemMode) {
         setIsSystemMode(systemModeRef.current);
       }
 
       if (resolvedTheme === targetThemeRef.current) {
-        // Switching between manual and system mode is a valid change even when
-        // the resolved theme is the same — return true so select() keeps the
-        // new selection instead of reverting.
+        // Manual↔system mode switch is valid even when the resolved theme matches —
+        // returning true prevents select() from reverting the user's selection.
         return wasSystemMode !== systemModeRef.current;
       }
 
@@ -353,8 +382,7 @@ export function createProviderAndContext<
         return true;
       }
 
-      // Block touches and mark as transitioning BEFORE firing user callbacks to prevent
-      // re-entrant setTheme calls from starting a concurrent transition.
+      // Block before user callbacks to prevent re-entrant setTheme.
       transitioningRef.current = true;
       isBlocking.value = true;
 
@@ -366,8 +394,6 @@ export function createProviderAndContext<
         resetTransition();
         throw e;
       }
-      // isTransitioning is set inside runTransition(), AFTER captureRef, so no React
-      // re-render can alter the native view before the screenshot is taken.
       runTransition(resolvedTheme, options).catch(() => {});
       return true;
     }, [isBlocking, resetTransition, runTransition]);
@@ -375,17 +401,17 @@ export function createProviderAndContext<
     useEffect(() => {
       const appearanceSub = Appearance.addChangeListener(({ colorScheme }) => {
         if (!systemModeRef.current) return;
+        lastKnownOsSchemeRef.current = normalizeScheme(colorScheme);
+        // Deferred restore listener in runTransition handles these.
+        if (deferredSystemRestoreRef.current !== null) return;
         if (transitioningRef.current) {
-          // Can't start a new transition now; store for reconciliation.
           pendingSchemeRef.current = normalizeScheme(colorScheme);
           return;
         }
         if (appStateRef.current === 'active') {
           setTheme('system');
         } else {
-          // Background: apply directly (works on Android where JS keeps running).
-          // On iOS the JS thread is suspended so this commit may be deferred —
-          // the AppState handler below re-applies on foreground return as a safety net.
+          // Background: apply directly. iOS may defer — AppState handler re-applies on foreground.
           const resolved = mapSchemeToTheme<Names>(normalizeScheme(colorScheme), systemThemeMap);
           if (!(resolved in themes) || resolved === targetThemeRef.current) return;
           targetThemeRef.current = resolved;
@@ -394,15 +420,10 @@ export function createProviderAndContext<
         }
       });
 
-      // Re-read OS scheme on foreground return. Catches two cases:
-      // 1. iOS never delivered Appearance events while suspended.
-      // 2. The BG setActiveTheme commit was deferred by iOS suspension.
+      // Re-read OS scheme on foreground return — iOS may not deliver
+      // Appearance events while suspended, or may defer the React commit.
       const appSub = AppState.addEventListener('change', (next) => {
         if (appStateRef.current !== 'active' && next === 'active' && systemModeRef.current) {
-          // Re-read OS scheme and force setActiveTheme. Even if the BG path
-          // already set targetThemeRef, iOS may have deferred the React commit.
-          // Calling setActiveTheme again guarantees an immediate commit now
-          // that the app is active.
           const resolved = resolveSystemTheme<Names>(systemThemeMap, schemeOf(targetThemeRef.current));
           if (resolved in themes) {
             const changed = resolved !== targetThemeRef.current;
@@ -426,11 +447,11 @@ export function createProviderAndContext<
 
     return (
       <Context.Provider value={contextValue}>
-        {/* collapsable={false} prevents Android from flattening the view, which breaks captureRef. */}
+        {/* collapsable={false}: Android flattens views by default, breaking captureRef. */}
         <View ref={rootRef} style={ROOT_STYLE} collapsable={false}>
           {children}
           <Animated.View style={ABSOLUTE_FILL} animatedProps={blockerProps} />
-          {/* Always mounted so the shared value is permanently connected — no mount-time race. */}
+          {/* Always mounted — avoids shared-value race on conditional mount. */}
           <Animated.View style={[ABSOLUTE_FILL, overlayStyle]} pointerEvents="none">
             {overlayUri != null ? (
               <Image source={overlaySource} style={ABSOLUTE_FILL} resizeMode="cover" fadeDuration={0} onLoad={onOverlayLoad} onError={onOverlayError} />

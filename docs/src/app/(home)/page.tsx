@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function HomePage() {
   return (
-    <main className="relative flex flex-col items-center justify-center flex-1 px-4 py-16 gap-12">
+    <main className="relative flex flex-col items-center justify-center flex-1 px-5 sm:px-10 py-16 gap-12">
       {/* Subtle accent gradient glow */}
       <div
         className="pointer-events-none fixed inset-0 z-0"
@@ -12,21 +12,21 @@ export default function HomePage() {
         }}
       />
 
-      <section className="relative z-10 flex flex-col items-center gap-10 max-w-2xl text-center">
+      <section className="relative z-10 flex flex-col items-center gap-10 w-full max-w-2xl text-center">
         {/* Title */}
         <div className="flex flex-col items-center gap-5">
-          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight">
+          <h1 className="text-2xl sm:text-5xl font-bold tracking-tight">
             React Native Theme Transition
           </h1>
-          <p className="text-lg text-fd-muted-foreground max-w-lg">
+          <p className="text-base sm:text-lg text-fd-muted-foreground max-w-lg">
             Smooth, animated theme transitions for React Native. Expo Go
-            compatible, 100% JS, powered by Reanimated.
+            compatible, powered by Reanimated.
           </p>
         </div>
 
         {/* Install snippet */}
-        <div className="w-full max-w-md">
-          <pre className="rounded-xl border border-fd-border bg-fd-card px-5 py-4 text-sm font-mono text-left overflow-x-auto">
+        <div className="w-full min-w-0 overflow-hidden sm:max-w-md">
+          <pre className="rounded-xl border border-fd-border bg-fd-card px-4 sm:px-2 py-3 sm:py-4 text-xs sm:text-sm font-mono text-left overflow-x-auto whitespace-pre">
             <span className="text-fd-muted-foreground select-none">$ </span>
             <span>npx expo install react-native-theme-transition react-native-worklets</span>
           </pre>
@@ -35,12 +35,11 @@ export default function HomePage() {
         {/* Feature pills */}
         <div className="flex flex-wrap justify-center gap-2">
           {[
-            'Cross-fade transitions',
-            'Expo Go compatible',
+            'Expo Go ready',
+            '60-120fps',
+            'Multi-theme',
             'System theme sync',
-            'TypeScript generics',
-            'React Compiler ready',
-            '~13 kB',
+            '~2.5 kB',
           ].map((feature) => (
             <span
               key={feature}
@@ -52,10 +51,10 @@ export default function HomePage() {
         </div>
 
         {/* CTA buttons */}
-        <div className="flex flex-row gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
           <Link
             href="/docs"
-            className="inline-flex items-center gap-2 rounded-full bg-fd-primary px-7 py-3 text-base font-medium text-fd-primary-foreground hover:bg-fd-primary/90 transition-colors"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-fd-primary px-6 py-3 text-base font-medium text-fd-primary-foreground hover:bg-fd-primary/90 transition-colors"
           >
             Documentation
           </Link>
@@ -63,7 +62,7 @@ export default function HomePage() {
             href="https://github.com/marioprieta/react-native-theme-transition"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-fd-border px-7 py-3 text-base font-medium hover:bg-fd-accent transition-colors"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-fd-border px-6 py-3 text-base font-medium hover:bg-fd-accent transition-colors"
           >
             <svg
               width="16"

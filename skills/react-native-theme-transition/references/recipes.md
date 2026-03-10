@@ -285,7 +285,9 @@ function ThemedNavigation({ children }) {
   const { colors, name } = useTheme();
 
   const navTheme = useMemo(() => ({
-    dark: name !== 'light', // or a more specific check for multi-theme
+    // For multi-theme (ocean, midnight, etc.), use a set:
+    // const DARK_THEMES = new Set(['dark', 'ocean', 'midnight']);
+    dark: name !== 'light', // or: DARK_THEMES.has(name)
     colors: {
       primary: colors.primary,
       background: colors.background,

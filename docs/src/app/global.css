@@ -38,9 +38,16 @@ figure.shiki {
   @apply md:border-0!;
 }
 
-/* Constrain page width */
+/* Constrain page width + mobile breathing room */
 #nd-page {
   max-width: 1050px;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  #nd-page {
+    padding-inline: 1.5rem;
+  }
 }
 
 /* Better prose spacing */
