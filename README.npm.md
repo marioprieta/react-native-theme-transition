@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/react-native-theme-transition"><img src="https://img.shields.io/npm/v/react-native-theme-transition.svg?t=1" alt="npm version" /></a>
-  <a href="https://bundlephobia.com/package/react-native-theme-transition"><img src="https://img.shields.io/badge/gzip%20size-2.5%20kB-brightgreen" alt="bundle size" /></a>
+  <a href="https://bundlephobia.com/package/react-native-theme-transition"><img src="https://img.shields.io/badge/gzip%20size-2.7%20kB-brightgreen" alt="bundle size" /></a>
   <img src="https://img.shields.io/badge/Expo_Go-compatible-000.svg?logo=expo&logoColor=white" alt="expo compatible" />
   <img src="https://img.shields.io/badge/React_Compiler-compatible-blueviolet.svg" alt="react compiler" />
   <a href="https://github.com/marioprieta/react-native-theme-transition/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/react-native-theme-transition?t=1" alt="license" /></a>
@@ -36,7 +36,7 @@
 - **Native UI sync** — alerts, keyboards, and date pickers automatically match your active theme
 - **Transition safe** — blocks concurrent transitions and exposes `isTransitioning`
 - **React Compiler ready** — all hooks follow the [Rules of React](https://react.dev/reference/rules)
-- **Lightweight** — ~2.5 kB gzipped, zero runtime dependencies
+- **Lightweight** — ~2.7 kB gzipped, zero runtime dependencies
 
 ## Documentation
 
