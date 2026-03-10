@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6
+
+### Patch Changes
+
+- 5450c49: Add CI workflow (lint, typecheck, build), Biome linter, and simplify release pipeline to use changeset publish
+
 ## 1.0.5
 
 ### Patch Changes
