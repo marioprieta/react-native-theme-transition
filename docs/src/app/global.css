@@ -46,7 +46,7 @@ figure.shiki {
 
 @media (min-width: 640px) {
   #nd-page {
-    padding-inline: 0;
+    padding-inline: 1.5rem;
   }
 }
 
