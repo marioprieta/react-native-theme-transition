@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5
+
+### Patch Changes
+
+- 2243758: Restructure agent skill for cleaner skills.sh URL, update READMEs with GIF demos and correct bundle size, add OIDC-based release workflow with automatic git tags and GitHub Releases.
+
 ## 1.0.3
 
 ### Patch Changes
