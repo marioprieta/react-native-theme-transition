@@ -6,23 +6,21 @@
  * `"textPrimary"`) and values are color strings accepted by React Native
  * (hex, rgb, rgba, named colors).
  */
-export type ThemeDefinition = Record<string, string>;
+export type ThemeDefinition = Record<string, string>
 
 /**
  * Union of theme names available in a theme configuration.
  *
  * @typeParam T - Your application's theme map, keyed by theme name.
  */
-export type ThemeNames<T extends Record<string, ThemeDefinition>> =
-  keyof T & string;
+export type ThemeNames<T extends Record<string, ThemeDefinition>> = keyof T & string
 
 /**
  * Union of token names shared across all themes in a configuration.
  *
  * @typeParam T - Your application's theme map, keyed by theme name.
  */
-export type TokenNames<T extends Record<string, ThemeDefinition>> =
-  keyof T[ThemeNames<T>] & string;
+export type TokenNames<T extends Record<string, ThemeDefinition>> = keyof T[ThemeNames<T>] & string
 
 /**
  * Maps OS color schemes (`'light'` / `'dark'`) to theme names.
@@ -33,8 +31,7 @@ export type TokenNames<T extends Record<string, ThemeDefinition>> =
  *
  * @typeParam Names - Union of theme name strings.
  */
-export type SystemThemeMap<Names extends string> =
-  Record<'light' | 'dark', Names>;
+export type SystemThemeMap<Names extends string> = Record<'light' | 'dark', Names>
 
 /**
  * Configuration for {@link createThemeTransition}.
@@ -50,13 +47,13 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    * cause a runtime error at initialization.
    * The name `'system'` is reserved and cannot be used as a theme name.
    */
-  themes: T;
+  themes: T
 
   /**
    * Cross-fade duration in milliseconds.
    * @default 350
    */
-  duration?: number;
+  duration?: number
 
   /**
    * Maps OS appearance (`'light'` / `'dark'`) to theme names.
@@ -66,7 +63,7 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    * and you want to use `initialTheme="system"` or `setTheme('system')`.
    * Both `light` and `dark` must be provided.
    */
-  systemThemeMap?: SystemThemeMap<ThemeNames<T>>;
+  systemThemeMap?: SystemThemeMap<ThemeNames<T>>
 
   /**
    * Theme names that use a dark color scheme.
@@ -82,7 +79,7 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    *
    * @default `[systemThemeMap.dark]` if `systemThemeMap` is provided, otherwise `['dark']`.
    */
-  darkThemes?: ThemeNames<T>[];
+  darkThemes?: ThemeNames<T>[]
 
   /**
    * Called when an animated transition begins, before the screenshot capture.
@@ -93,7 +90,7 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    *
    * @param themeName - The target theme name.
    */
-  onTransitionStart?: (themeName: ThemeNames<T>) => void;
+  onTransitionStart?: (themeName: ThemeNames<T>) => void
 
   /**
    * Called after an animated transition completes and the overlay is removed.
@@ -109,7 +106,7 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    *
    * @param themeName - The newly active theme name.
    */
-  onTransitionEnd?: (themeName: ThemeNames<T>) => void;
+  onTransitionEnd?: (themeName: ThemeNames<T>) => void
 
   /**
    * Called whenever the active theme changes.
@@ -121,7 +118,7 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
    *
    * @param themeName - The newly active theme name.
    */
-  onThemeChange?: (themeName: ThemeNames<T>) => void;
+  onThemeChange?: (themeName: ThemeNames<T>) => void
 }
 
 /**
@@ -139,7 +136,7 @@ export interface SetThemeOptions<Names extends string = string> {
    *
    * @default true
    */
-  animated?: boolean;
+  animated?: boolean
 
   /**
    * Called when the animated transition begins, before the screenshot capture.
@@ -150,7 +147,7 @@ export interface SetThemeOptions<Names extends string = string> {
    *
    * @param themeName - The target theme name.
    */
-  onTransitionStart?: (themeName: Names) => void;
+  onTransitionStart?: (themeName: Names) => void
 
   /**
    * Called after the animated transition completes and the overlay is removed.
@@ -165,7 +162,7 @@ export interface SetThemeOptions<Names extends string = string> {
    *
    * @param themeName - The newly active theme name.
    */
-  onTransitionEnd?: (themeName: Names) => void;
+  onTransitionEnd?: (themeName: Names) => void
 }
 
 /**
@@ -174,14 +171,11 @@ export interface SetThemeOptions<Names extends string = string> {
  * @typeParam Tokens - Union of token name strings.
  * @typeParam Names - Union of theme name strings.
  */
-export interface UseThemeResult<
-  Tokens extends string,
-  Names extends string,
-> {
+export interface UseThemeResult<Tokens extends string, Names extends string> {
   /** Current resolved color values for all tokens. */
-  colors: Record<Tokens, string>;
+  colors: Record<Tokens, string>
   /** Name of the currently active theme (resolved, never `'system'`). */
-  name: Names;
+  name: Names
   /**
    * Switch to a new theme or enter system mode.
    *
@@ -190,9 +184,9 @@ export interface UseThemeResult<
    * @returns `true` if the theme change was accepted, `false` if rejected
    *          (already transitioning or same theme).
    */
-  setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => boolean;
+  setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => boolean
   /** `true` while a cross-fade transition overlay is visible. */
-  isTransitioning: boolean;
+  isTransitioning: boolean
 }
 
 /**
@@ -203,7 +197,7 @@ export interface UseThemeResult<
  */
 export interface ThemeSelectionResult<Names extends string> {
   /** The currently selected option (may be `'system'`). */
-  selected: Names | 'system';
+  selected: Names | 'system'
   /**
    * Select a theme with transition-safe timing.
    *
@@ -215,7 +209,7 @@ export interface ThemeSelectionResult<Names extends string> {
    *
    * @param option - Theme name or `'system'`.
    */
-  select: (option: Names | 'system') => void;
+  select: (option: Names | 'system') => void
 }
 
 /**
@@ -232,7 +226,7 @@ export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
    * navigation) so the screenshot can capture the entire screen.
    */
   ThemeTransitionProvider: React.FC<{
-    children: React.ReactNode;
+    children: React.ReactNode
     /**
      * Theme to render on the first frame.
      *
@@ -241,8 +235,8 @@ export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
      * and subscribe to changes. For custom theme names, provide
      * {@link ThemeTransitionConfig.systemThemeMap | systemThemeMap} in the config.
      */
-    initialTheme: ThemeNames<T> | 'system';
-  }>;
+    initialTheme: ThemeNames<T> | 'system'
+  }>
 
   /**
    * Hook returning the current theme state and transition controls.
@@ -294,11 +288,13 @@ export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
    */
   useTheme: {
     /** Returns current theme state and controls. */
-    (): UseThemeResult<TokenNames<T>, ThemeNames<T>>;
+    (): UseThemeResult<TokenNames<T>, ThemeNames<T>>
     /**
      * Returns theme state, controls, and selection tracking with transition-safe timing.
      * @param options.initialSelection - Starting value for `selected`. Defaults to the current theme name.
      */
-    (options: { initialSelection?: ThemeNames<T> | 'system' }): UseThemeResult<TokenNames<T>, ThemeNames<T>> & ThemeSelectionResult<ThemeNames<T>>;
-  };
+    (options: {
+      initialSelection?: ThemeNames<T> | 'system'
+    }): UseThemeResult<TokenNames<T>, ThemeNames<T>> & ThemeSelectionResult<ThemeNames<T>>
+  }
 }

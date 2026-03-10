@@ -14,16 +14,16 @@
  * @packageDocumentation
  */
 
-export { createThemeTransition } from './createThemeTransition';
+export { createThemeTransition } from './createThemeTransition'
 
 export type {
-  ThemeTransitionConfig,
-  ThemeTransitionAPI,
-  UseThemeResult,
-  ThemeSelectionResult,
-  SystemThemeMap,
   SetThemeOptions,
+  SystemThemeMap,
   ThemeDefinition,
   ThemeNames,
+  ThemeSelectionResult,
+  ThemeTransitionAPI,
+  ThemeTransitionConfig,
   TokenNames,
-} from './types';
+  UseThemeResult,
+} from './types'

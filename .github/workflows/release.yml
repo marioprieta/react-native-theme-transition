@@ -37,31 +37,9 @@ jobs:
         run: npm run build
 
       - name: Create Release PR or Publish
-        id: changesets
         uses: changesets/action@v1
         with:
-          publish: npm publish --access public --provenance
+          publish: npx changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create git tag and GitHub Release
-        if: steps.changesets.outputs.published == 'true' || steps.changesets.outputs.hasChangesets == 'false'
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v${VERSION}"
-          # Check if tag already exists
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists, skipping"
-            exit 0
-          fi
-          # Check if this version is on npm (confirms publish happened)
-          PUBLISHED=$(npm view react-native-theme-transition version 2>/dev/null || echo "")
-          if [ "$PUBLISHED" != "$VERSION" ]; then
-            echo "Version $VERSION not yet on npm, skipping tag"
-            exit 0
-          fi
-          git tag "$TAG"
-          git push origin "$TAG"
-          gh release create "$TAG" --title "$TAG" --generate-notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true

@@ -10,15 +10,15 @@
  * @module
  */
 
+import { TAG } from './constants'
+import { createUseTheme } from './hooks/useTheme'
+import { createProviderAndContext } from './transitionEngine'
 import type {
-  ThemeTransitionAPI,
-  ThemeTransitionConfig,
   ThemeDefinition,
   ThemeNames,
-} from './types';
-import { createProviderAndContext } from './transitionEngine';
-import { createUseTheme } from './hooks/useTheme';
-import { TAG } from './constants';
+  ThemeTransitionAPI,
+  ThemeTransitionConfig,
+} from './types'
 
 /**
  * Creates a fully typed theme transition system.
@@ -34,59 +34,60 @@ import { TAG } from './constants';
  * });
  * ```
  */
-export function createThemeTransition<
-  T extends Record<string, ThemeDefinition>,
->(config: ThemeTransitionConfig<T>): ThemeTransitionAPI<T> {
-  const themeNames = Object.keys(config.themes) as ThemeNames<T>[];
+export function createThemeTransition<T extends Record<string, ThemeDefinition>>(
+  config: ThemeTransitionConfig<T>,
+): ThemeTransitionAPI<T> {
+  const themeNames = Object.keys(config.themes) as ThemeNames<T>[]
 
   if (themeNames.length === 0) {
-    throw new Error(`${TAG} \`themes\` must contain at least one theme.`);
+    throw new Error(`${TAG} \`themes\` must contain at least one theme.`)
   }
 
   if ('system' in config.themes) {
     throw new Error(
       `${TAG} \`"system"\` is a reserved name and cannot be used as a theme key. Rename the theme and use \`systemThemeMap\` to map OS appearance to it.`,
-    );
+    )
   }
 
-  const referenceTheme = themeNames[0];
-  const referenceKeys = Object.keys(config.themes[referenceTheme]).sort();
+  const referenceTheme = themeNames[0]
+  const referenceKeys = Object.keys(config.themes[referenceTheme]).sort()
   for (const name of themeNames) {
-    if (name === referenceTheme) continue;
-    const keys = Object.keys(config.themes[name]).sort();
+    if (name === referenceTheme) continue
+    const keys = Object.keys(config.themes[name]).sort()
     if (keys.length !== referenceKeys.length || keys.some((k, i) => k !== referenceKeys[i])) {
       throw new Error(
         `${TAG} Theme "${name}" has different token keys than "${referenceTheme}". All themes must share identical keys.`,
-      );
+      )
     }
   }
 
-  if (config.duration != null && (typeof config.duration !== 'number' || !isFinite(config.duration) || config.duration < 0)) {
-    throw new Error(
-      `${TAG} \`duration\` must be a finite non-negative number.`,
-    );
+  if (
+    config.duration != null &&
+    (typeof config.duration !== 'number' ||
+      !Number.isFinite(config.duration) ||
+      config.duration < 0)
+  ) {
+    throw new Error(`${TAG} \`duration\` must be a finite non-negative number.`)
   }
 
   if (config.systemThemeMap) {
     if (!('light' in config.systemThemeMap) || !('dark' in config.systemThemeMap)) {
-      throw new Error(
-        `${TAG} \`systemThemeMap\` must provide both \`light\` and \`dark\` keys.`,
-      );
+      throw new Error(`${TAG} \`systemThemeMap\` must provide both \`light\` and \`dark\` keys.`)
     }
 
     for (const [scheme, name] of Object.entries(config.systemThemeMap)) {
       if (!(name in config.themes)) {
         throw new Error(
           `${TAG} \`systemThemeMap.${scheme}\` maps to "${name}" which does not exist in themes.`,
-        );
+        )
       }
     }
   }
 
-  const { Context, ThemeTransitionProvider } = createProviderAndContext(config);
+  const { Context, ThemeTransitionProvider } = createProviderAndContext(config)
 
   return {
     ThemeTransitionProvider,
     useTheme: createUseTheme<T>(Context),
-  };
+  }
 }
