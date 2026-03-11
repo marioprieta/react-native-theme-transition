@@ -31,6 +31,9 @@ function ThemedNavigation({ children }) {
 }
 ```
 
+`useMemo` prevents creating a new theme object on every render, which would cause
+React Navigation to re-diff and re-layout all screens unnecessarily.
+
 Place inside the theme provider:
 
 ```tsx

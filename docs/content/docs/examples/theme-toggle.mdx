@@ -71,6 +71,7 @@ export function ThemeToggle() {
 - `useTheme({})` — not `useTheme()`. The toggle thumb is a selection indicator, so it needs selection tracking. `useTheme({})` defaults `initialSelection` to the current theme from context.
 - **Plain React styles only** — no Reanimated for the thumb position. The visual state must update in React's commit cycle so the screenshot captures the correct position.
 - `select()` updates `selected` immediately, then defers `setTheme` by one frame.
+- `select()` includes built-in press lock — if called during a transition, it's silently ignored. `disabled={isTransitioning}` provides visual feedback, but the internal lock prevents race conditions even without it.
 
 <Callout type="info">
   **Rule of thumb:** any component whose visual state changes on theme switch

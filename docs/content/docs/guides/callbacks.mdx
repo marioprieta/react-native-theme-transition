@@ -49,6 +49,13 @@ No `onTransitionStart`, no `onTransitionEnd`, no touch blocking, no screenshot.
   handlers to be resilient to a missing matching `onTransitionEnd`.
 </Callout>
 
+### Detecting capture failures
+
+If `onTransitionStart` fires but `onTransitionEnd` does not within `duration + 100ms`,
+the capture failed. Design `onTransitionStart` handlers to be idempotent (safe to run
+without a matching `onTransitionEnd`). Use `onThemeChange` as the only guaranteed
+callback for tracking all theme changes.
+
 ## System-driven change
 
 OS appearance changes use the same paths above:
@@ -65,3 +72,9 @@ OS appearance changes use the same paths above:
 | `onTransitionEnd` (config) | Yes | No | **No** |
 | `onTransitionEnd` (per-call) | Yes | No | **No** |
 | `onThemeChange` (config) | Yes | Yes | Yes |
+
+<Callout type="info">
+  When the app returns to the foreground after a background appearance change, the library
+  re-reads the OS scheme and applies an instant correction if needed. This handles iOS's
+  behavior of deferring Appearance events during suspension. `onThemeChange` fires in all cases.
+</Callout>

@@ -42,6 +42,13 @@ Use it to:
 - Defer expensive renders
 - Show loading indicators
 
+<Callout type="info">
+  Touch blocking starts immediately when `setTheme()` is called (synchronous, via
+  Reanimated shared value). `isTransitioning` becomes `true` later, after the screenshot
+  is captured. Use `disabled={isTransitioning}` on buttons as a convenience — the library
+  already blocks touch input internally from the moment `setTheme()` is called.
+</Callout>
+
 ## Changing themes
 
 | Param | Type | Description |
@@ -108,6 +115,10 @@ captures the screenshot. `select` solves this by:
 2. Deferring `setTheme` by one `requestAnimationFrame`
 3. Using an internal press lock ref to prevent rapid presses during transitions
 
+If `select()` is called during a transition, it's silently ignored (returns without action).
+Add `disabled={isTransitioning}` to your Pressable for visual feedback — but even without it,
+the internal lock prevents race conditions.
+
 ### When to use which
 
 <Callout type="info">
@@ -125,7 +136,21 @@ captures the screenshot. `select` solves this by:
 
 ### Local state caveat
 
-`selected` is managed locally inside the hook. If the theme changes externally — via a bridge
-component calling `setTheme`, or a system appearance change — the context `name` updates but
-`selected` does not. Use `name` for display and `selected` only for the highlight state if
-you need to stay in sync with external changes.
+`selected` is managed locally inside the hook. If the theme changes externally — via a
+system appearance change — the context `name` updates but `selected` does not. Use `name`
+for display and `selected` only for the highlight state.
+
+### With external stores
+
+When persisting to Zustand, Redux, or MMKV, call `select()` and the store setter together
+in `onPress`. Don't use a reactive bridge that calls `setTheme` on every store change —
+it races with `select()`'s deferred timing and reverts the pill.
+
+```tsx
+onPress={() => {
+  select(mode);       // visual transition
+  setColorMode(mode); // persistence
+}}
+```
+
+See [State Managers](/docs/recipes/zustand) for the full pattern including hydration.

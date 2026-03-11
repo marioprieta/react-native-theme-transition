@@ -58,6 +58,16 @@ export default function RootLayout() {
 - `InnerLayout` must be inside the provider (it uses `useTheme`)
 - `initialTheme="system"` for OS-following by default
 - `ThemeProvider` from `@react-navigation/native` feeds typed colors to navigation headers, tab bars, etc.
+- `headerShown: false` is used here for simplicity — it's not required by the library. Headers inside the provider are captured in the screenshot normally.
+
+### Nesting order
+
+```
+GestureHandlerRootView
+  └─ ThemeTransitionProvider     ← captures everything inside for screenshots
+      └─ ThemeProvider            ← from @react-navigation/native, feeds colors to headers/tabs
+          └─ Stack / Tabs         ← your navigation
+```
 
 ## Bottom sheets and modals
 

@@ -22,7 +22,7 @@ everything inside the provider's root `View`.
 
 ## Initial theme behavior
 
-- Read once in a lazy `useState` initializer — subsequent prop changes are ignored
+- Read once when the provider first mounts. If a parent re-renders and passes a different `initialTheme`, the provider ignores it. To change themes after mount, call `setTheme()`
 - `'system'` reads OS appearance synchronously (zero flash) and subscribes to changes
 - With custom names: requires `systemThemeMap` in config, otherwise throws
 - An explicit theme name (e.g. `'dark'`) does not subscribe to OS changes

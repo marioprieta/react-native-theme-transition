@@ -138,3 +138,14 @@ export function useTheme() {
 
 This lets you migrate incrementally — old components keep working while you
 update them one by one.
+
+## Migration checklist
+
+- [ ] Install library and peer dependencies
+- [ ] Create theme file with matching token keys across all themes
+- [ ] Wrap root with `ThemeTransitionProvider`
+- [ ] (Optional) Create adapter hook for incremental migration
+- [ ] Replace color references from old system to `useTheme().colors`
+- [ ] Replace theme toggle logic with `setTheme()` or `select()`
+- [ ] Remove old context/provider
+- [ ] Test: light↔dark, system mode, rapid taps, background/foreground

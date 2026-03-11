@@ -5,7 +5,7 @@ description: Follow OS appearance automatically with zero-flash startup.
 
 ## Basic setup
 
-Pass `initialTheme="system"` to follow OS appearance from the first frame:
+Pass `initialTheme="system"` to follow OS appearance from the first frame. The OS scheme is read synchronously before the first render, preventing a flash of the wrong theme:
 
 ```tsx
 <ThemeTransitionProvider initialTheme="system">

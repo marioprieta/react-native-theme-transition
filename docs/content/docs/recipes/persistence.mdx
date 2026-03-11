@@ -18,7 +18,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     AsyncStorage.getItem('theme-preference').then((v) => {
-      setInitial((v as 'light' | 'dark' | 'system') ?? 'system');
+      const valid = ['light', 'dark', 'system'].includes(v ?? '')
+        ? (v as 'light' | 'dark' | 'system')
+        : 'system';
+      setInitial(valid);
     });
   }, []);
 
@@ -57,6 +60,12 @@ function ThemeSettings() {
 }
 ```
 
+<Callout type="info">
+  This pattern calls `setTheme()` directly because the buttons have no visual selection
+  indicator. For pickers with pill highlights, checkmarks, or toggles, use `select()` from
+  `useTheme({ initialSelection })`. See [State Managers](/docs/recipes/zustand).
+</Callout>
+
 ## Avoiding double transitions on startup
 
 If `initialTheme="system"` resolves to `'light'` but the stored preference is `'dark'`,
@@ -68,22 +77,8 @@ the app starts light, then immediately transitions to dark.
 <ThemeTransitionProvider initialTheme={storedPreference}>
 ```
 
-Or use an instant switch for the first render:
-
-```tsx
-import { useEffect, useRef } from 'react';
-import { useTheme } from '@/lib/theme';
-
-function ThemeBridge() {
-  const stored = useStoredPreference();
-  const { setTheme } = useTheme();
-  const isFirst = useRef(true);
-
-  useEffect(() => {
-    setTheme(stored, { animated: !isFirst.current });
-    isFirst.current = false;
-  }, [stored, setTheme]);
-
-  return null;
-}
-```
+<Callout type="info">
+  For Zustand, Redux, or MMKV with `select()`-based pickers, see
+  [State Managers](/docs/recipes/zustand) for the hydration-only bridge pattern
+  that avoids both double transitions and race conditions with selection tracking.
+</Callout>

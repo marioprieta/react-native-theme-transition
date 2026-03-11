@@ -117,3 +117,13 @@ setTheme('dark')  // ok
 setTheme('ocean') // TypeScript error
 setTheme('system')// always valid
 ```
+
+## When to import these types
+
+| Building... | Import |
+|---|---|
+| A theme picker component | `ThemeSelectionResult`, `UseThemeResult` |
+| A ThemeBridge component | `ThemeNames` |
+| Passing options to setTheme | `SetThemeOptions` |
+| Typing the config object | `ThemeTransitionConfig` |
+| Working with system theme mapping | `SystemThemeMap` |
