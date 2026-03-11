@@ -24,6 +24,30 @@ See [Theme Picker example](/docs/examples/theme-picker) for the complete pattern
 
 ---
 
+## Picker pill flashes back after tapping
+
+**Symptom:** Tapping a theme option briefly highlights it, then the pill snaps
+back to the previous selection. The theme changes but the picker is wrong.
+
+**Cause:** A reactive bridge (`useEffect → setTheme`) fires before `select()`'s
+deferred `requestAnimationFrame`. The bridge steals the transition, and when
+`select()`'s `setTheme` runs, `transitioningRef` is `true` → returns `false` →
+`select()` reverts the pill.
+
+**Fix:** Use a **hydration-only bridge** that syncs once on app start, then let
+the picker call `select()` + store setter directly in `onPress`:
+
+```tsx
+onPress={() => {
+  select(mode);       // visual transition
+  setColorMode(mode); // persistence
+}}
+```
+
+See [State Managers](/docs/recipes/zustand) for the full pattern.
+
+---
+
 ## Native Switch flickers
 
 **Symptom:** On iOS, a native `<Switch>` thumb appears mid-slide in the screenshot.
@@ -143,8 +167,8 @@ const dark: Record<keyof typeof light, string> = { bg: '#000', text: '#fff' };
 ```tsx
 import { useThemeStore } from '@/stores/theme-store';
 
-const themePreference = useThemeStore((s) => s.themePreference);
-<ThemeTransitionProvider initialTheme={themePreference}>
+const colorMode = useThemeStore((s) => s.colorMode);
+<ThemeTransitionProvider initialTheme={colorMode}>
 ```
 
 ---
@@ -156,6 +180,19 @@ const themePreference = useThemeStore((s) => s.themePreference);
 1. **`collapsable` not set** — The root View needs `collapsable={false}` (set internally)
 2. **Hardware acceleration issues** — The library falls back to instant switch automatically
 3. **View not fully rendered** — The library waits frames before capture to prevent this
+
+---
+
+## Fast Refresh issues
+
+**Symptom:** After saving a file during development, the overlay stays visible or
+system mode stops following the OS.
+
+**Cause:** Fast Refresh reloads JS but does not reset native state.
+`Appearance.setColorScheme` from the previous session persists, and if a transition
+was in progress, the overlay cleanup may not fire.
+
+**Fix:** Perform a full reload (`Cmd+R` / `R R`). This only affects development.
 
 ---
 

@@ -42,7 +42,7 @@ sequenceDiagram
 5. Screenshot displayed as an opaque overlay
 6. `Image.onLoad` confirms the bitmap is decoded (event-based, not frame-guessing)
 7. One frame for the compositor to paint the overlay on screen
-8. Color tokens switched underneath
+8. Color tokens switched underneath — the provider updates its React context with new tokens, all children re-render with new colors while the overlay is still opaque
 9. One frame for React to commit the new theme under the still-opaque overlay
 10. Overlay fades out on the UI thread via `react-native-reanimated` — the RN repaint pipeline completes during the first frames of the fade, when the overlay is still near-opaque
 11. Touches unblocked and overlay removed once the fade completes via a worklet callback (`react-native-worklets`)
@@ -61,6 +61,9 @@ to ensure each stage completes before proceeding:
 - **2 frames before capture**: ensures pending state changes are fully painted
 - **1 frame after overlay mount**: ensures the compositor has painted the overlay
 - **1 frame after color switch**: ensures React has committed the new theme
+
+The animation duration (default 350ms) is independent of frame rate and runs via Reanimated
+on the UI thread, matching the device's native refresh rate (60–120 FPS).
 
 ## Why screenshots?
 

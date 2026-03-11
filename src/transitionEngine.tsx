@@ -193,15 +193,13 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
     // State mirror of systemModeRef — drives the Appearance.setColorScheme effect.
     const [isSystemMode, setIsSystemMode] = useState(initialTheme === 'system')
     const appStateRef = useRef(AppState.currentState)
-    // Pending OS scheme change that arrived mid-transition. Applied by finishTransition.
+    // OS scheme change that arrived while the overlay was animating.
     const pendingSchemeRef = useRef<'light' | 'dark' | null>(null)
-    // Last observed OS scheme — lets manual→system resolve without calling
-    // setColorScheme('unspecified') (which flashes the Android status bar).
+    // Avoids calling setColorScheme('unspecified') pre-overlay (Android status bar flash).
     const lastKnownOsSchemeRef = useRef<'light' | 'dark'>(
       normalizeScheme(Appearance.getColorScheme()),
     )
-    // Manual override scheme while a deferred setColorScheme('unspecified') is pending.
-    // finishTransition uses this to correct the theme if the OS scheme diverged.
+    // Non-null while setColorScheme('unspecified') is deferred behind the overlay.
     const deferredSystemRestoreRef = useRef<'light' | 'dark' | null>(null)
 
     // SharedValue (not state) so touch blocking takes effect on the native thread
@@ -235,10 +233,16 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
       }
     }, [])
 
-    // Sync native UI (alerts, keyboards) with theme. Skipped in system mode
-    // where the OS drives appearance via 'unspecified'.
+    // Keeps native Appearance (alerts, keyboards, status bar) in sync with mode.
     useEffect(() => {
-      if (isSystemMode) return
+      if (isSystemMode) {
+        // Explicit mode masks the real OS scheme from the Appearance listener.
+        if (!transitioningRef.current) {
+          deferredSystemRestoreRef.current = null
+          Appearance.setColorScheme('unspecified')
+        }
+        return
+      }
       if (isTransitioning) return
       Appearance.setColorScheme(schemeOf(activeTheme.name))
     }, [isSystemMode, activeTheme.name, isTransitioning])
@@ -325,7 +329,7 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
             safeCall('per-call onTransitionEnd', options?.onTransitionEnd, name)
             safeCall('config onThemeChange', onThemeChange, name)
 
-            // Apply any OS scheme change that arrived mid-transition.
+            // OS may have changed while the overlay was up.
             if (systemModeRef.current && pendingSchemeRef.current !== null) {
               const resolved = mapSchemeToTheme<Names>(pendingSchemeRef.current, systemThemeMap)
               pendingSchemeRef.current = null
@@ -361,15 +365,16 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
 
     const setTheme = useCallback(
       (name: Names | 'system', options?: SetThemeOptions<Names>): boolean => {
-        // Manual→system: resolve from cached OS scheme to avoid the Android
-        // status bar flash that setColorScheme('unspecified') causes pre-overlay.
+        // Calling setColorScheme('unspecified') pre-overlay flashes the Android status bar.
         if (name === 'system' && !systemModeRef.current) {
           if (transitioningRef.current) return false
 
           setIsSystemMode(true)
           systemModeRef.current = true
           deferredSystemRestoreRef.current = schemeOf(targetThemeRef.current)
-          return setTheme('system', options)
+          // Entering system mode is always a valid change for select().
+          setTheme('system', options)
+          return true
         }
 
         const resolvedTheme =
@@ -394,6 +399,10 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
 
         if (systemModeRef.current !== wasSystemMode) {
           setIsSystemMode(systemModeRef.current)
+          // Stale deferred ref would override the user's explicit choice.
+          if (!systemModeRef.current) {
+            deferredSystemRestoreRef.current = null
+          }
         }
 
         if (resolvedTheme === targetThemeRef.current) {

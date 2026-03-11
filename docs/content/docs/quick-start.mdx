@@ -60,6 +60,9 @@ description: Define themes, wrap your app, and start using theme colors in three
       );
     }
     ```
+
+    `initialTheme="system"` reads the OS appearance synchronously on launch and
+    subscribes to OS changes. See [System Theme](/docs/examples/system-theme) for details.
   </Step>
   <Step>
     ### Use in components
@@ -85,6 +88,9 @@ description: Define themes, wrap your app, and start using theme colors in three
       );
     }
     ```
+
+    `isTransitioning` is `true` while the fade animation is running. Disabling buttons
+    during this time prevents double-taps that would be rejected by the library anyway.
   </Step>
 </Steps>
 

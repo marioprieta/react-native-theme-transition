@@ -55,6 +55,56 @@ export function ThemePicker() {
 - `isTransitioning` disables all buttons during the cross-fade
 - Plain `style={{...}}` — no Reanimated, no `({ pressed }) => ...`
 
+## With persistence
+
+When using an external store (Zustand, Redux, MMKV), call `select()` and the
+store setter together in `onPress`. Don't route changes through a reactive bridge —
+it races with `select()`'s deferred timing.
+
+```tsx
+import { useTheme } from '@/lib/theme';
+import { useThemeStore } from '@/stores/theme-store';
+
+const OPTIONS = ['system', 'light', 'dark'] as const;
+
+export function ThemePicker() {
+  const colorMode = useThemeStore((s) => s.colorMode);
+  const setColorMode = useThemeStore((s) => s.setColorMode);
+  const { selected, select, colors, isTransitioning } =
+    useTheme({ initialSelection: colorMode });
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {OPTIONS.map((option) => (
+        <Pressable
+          key={option}
+          onPress={() => {
+            select(option);       // visual transition
+            setColorMode(option); // persistence
+          }}
+          disabled={isTransitioning}
+          style={{
+            flex: 1,
+            padding: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            backgroundColor:
+              option === selected ? colors.primary : 'transparent',
+          }}
+        >
+          <Text style={{ color: option === selected ? '#fff' : colors.text }}>
+            {option}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+```
+
+The pill highlight is driven by `selected` (from the hook), not `colorMode` (from the store).
+See [State Managers](/docs/recipes/zustand) for the full Zustand setup including the hydration-only bridge.
+
 ## Why not call `setTheme` directly?
 
 On iOS 120Hz displays, calling `setSelected()` and `setTheme()` in the same event
