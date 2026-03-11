@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["jest"],
+    "noUnusedLocals": false,
+    "esModuleInterop": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*", "__tests__/**/*"]
+}
