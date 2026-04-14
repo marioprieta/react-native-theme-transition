@@ -5,10 +5,15 @@ jest.mock('react-native', () => ({
     setColorScheme: jest.fn(),
     addChangeListener: jest.fn(() => ({ remove: jest.fn() })),
   },
+  AccessibilityInfo: {
+    isReduceMotionEnabled: jest.fn(() => Promise.resolve(false)),
+    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  },
   AppState: {
     currentState: 'active',
     addEventListener: jest.fn(() => ({ remove: jest.fn() })),
   },
+  Dimensions: { get: () => ({ width: 390, height: 844 }) },
   View: 'View',
   Image: 'Image',
 }))
@@ -18,13 +23,45 @@ jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: 'Animated.View' },
   useSharedValue: (initial) => ({ value: initial, set: jest.fn() }),
+  useDerivedValue: (fn) => ({ value: fn() }),
   useAnimatedProps: (fn) => fn(),
   withTiming: (_val, _config, cb) => cb,
 }))
 
-jest.mock('react-native-view-shot', () => ({
-  captureRef: jest.fn(() => Promise.resolve('file:///mock.jpg')),
-}))
+jest.mock('@shopify/react-native-skia', () => {
+  const mockPath = () => ({
+    addCircle: jest.fn(),
+    moveTo: jest.fn(),
+    lineTo: jest.fn(),
+    cubicTo: jest.fn(),
+    close: jest.fn(),
+  })
+  return {
+    Canvas: 'Canvas',
+    Image: 'SkiaImage',
+    Group: 'Group',
+    Circle: 'Circle',
+    Rect: 'Rect',
+    Fill: 'Fill',
+    Shader: 'Shader',
+    ImageShader: 'ImageShader',
+    usePathInterpolation: () => ({ value: mockPath() }),
+    Skia: {
+      Path: { Make: mockPath },
+      RuntimeEffect: { Make: jest.fn(() => ({})) },
+    },
+    makeImageFromView: jest.fn(() => {
+      const mockCpuImage = {
+        dispose: jest.fn(),
+        encodeToBase64: () => 'mockBase64',
+        width: () => 390,
+        height: () => 844,
+      }
+      const mockGpuImage = { makeNonTextureImage: () => mockCpuImage, dispose: jest.fn() }
+      return Promise.resolve(mockGpuImage)
+    }),
+  }
+})
 
 jest.mock('react-native-worklets', () => ({
   scheduleOnRN: (fn) => fn(),

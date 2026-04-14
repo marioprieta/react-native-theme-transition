@@ -2,10 +2,16 @@
  * Factory that wires the theme transition provider, context, and hooks.
  *
  * @remarks
- * Validates theme configuration at initialization: ensures at least one theme
- * exists and that all themes share identical token keys.
- * Returns a self-contained API ({@link ThemeTransitionAPI}) with no singletons,
- * so multiple theme scopes can coexist in the same app.
+ * Validates the supplied configuration at call time:
+ * - at least one theme is provided
+ * - every theme shares identical token keys
+ * - the reserved `"system"` name is not used as a theme key
+ * - `duration` is a finite non-negative number (if provided)
+ * - `transition` is one of the supported transitions (if provided)
+ * - `systemThemeMap` points at themes that exist (if provided)
+ *
+ * Returns a self-contained API ({@link ThemeTransitionAPI}) with no
+ * singletons — multiple theme scopes can coexist in the same app.
  *
  * @module
  */
@@ -13,6 +19,7 @@
 import { TAG } from './constants'
 import { createUseTheme } from './hooks/useTheme'
 import { createProviderAndContext } from './transitionEngine'
+import { TRANSITION_TYPES } from './transitionMeta'
 import type {
   ThemeDefinition,
   ThemeNames,
@@ -26,12 +33,15 @@ import type {
  * @typeParam T - Your application's theme map, keyed by theme name.
  * @param config - Theme configuration including available themes and defaults.
  * @returns A provider component and hooks scoped to the supplied themes.
+ * @throws {Error} If `themes` is empty, if token keys differ across themes,
+ * if a reserved or unknown theme name is used in config, or if duration /
+ * transition defaults are invalid.
  *
  * @example
  * ```tsx
  * const { ThemeTransitionProvider, useTheme } = createThemeTransition({
  *   themes: { light: { bg: '#fff' }, dark: { bg: '#000' } },
- * });
+ * })
  * ```
  */
 export function createThemeTransition<T extends Record<string, ThemeDefinition>>(
@@ -68,6 +78,12 @@ export function createThemeTransition<T extends Record<string, ThemeDefinition>>
       config.duration < 0)
   ) {
     throw new Error(`${TAG} \`duration\` must be a finite non-negative number.`)
+  }
+
+  if (config.transition != null && !TRANSITION_TYPES.includes(config.transition)) {
+    throw new Error(
+      `${TAG} \`transition\` must be one of: ${TRANSITION_TYPES.join(', ')}. Got "${config.transition}".`,
+    )
   }
 
   if (config.systemThemeMap) {

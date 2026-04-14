@@ -3,27 +3,36 @@
  *
  * @remarks
  * The transition mechanism works in five steps:
- * 1. Blocks touch input via a Reanimated shared value (instant, no React re-render).
- * 2. Captures the current native view via `react-native-view-shot`.
- * 3. Overlays the snapshot as an absolute-positioned `Image` (`onLoad` confirms decode).
- * 4. Mutates context to inject new theme colors underneath.
- * 5. Fades the overlay to zero via `react-native-reanimated` — the native repaint
- *    completes during the first frames while the overlay is still near-opaque.
+ * 1. Blocks touch input instantly via a Reanimated shared value (no React re-render).
+ * 2. Captures a snapshot of the current native view using `@shopify/react-native-skia`.
+ * 3. Renders the snapshot as an overlay in a Skia Canvas.
+ * 4. Swaps the context colors to the new theme underneath the overlay.
+ * 5. Animates the overlay away using the selected transition — fade,
+ *    circular reveal, wipe, slide, split, heart, star, pixelize,
+ *    or dissolve.
  *
- * @see {@link createThemeTransition} for the main API surface.
+ * @see {@link createThemeTransition} — main API entry.
+ * @see {@link useReducedMotion} — hook for the OS "Reduce Motion" setting.
  * @packageDocumentation
  */
 
 export { createThemeTransition } from './createThemeTransition'
+export { useReducedMotion } from './hooks/useReducedMotion'
+export type { TransitionKind } from './transitionMeta'
+export { TRANSITION_META, TRANSITION_TYPES } from './transitionMeta'
 
 export type {
+  OriginSpec,
+  SelectOptions,
   SetThemeOptions,
   SystemThemeMap,
   ThemeDefinition,
   ThemeNames,
-  ThemeSelectionResult,
   ThemeTransitionAPI,
   ThemeTransitionConfig,
   TokenNames,
+  TransitionOrigin,
+  TransitionType,
+  UseThemeOptions,
   UseThemeResult,
 } from './types'
