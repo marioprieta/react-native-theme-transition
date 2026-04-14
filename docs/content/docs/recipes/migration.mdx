@@ -1,7 +1,81 @@
 ---
 title: Migration Guide
-description: Migrate from plain Context, Zustand, Redux, MMKV, or React Navigation theming.
+description: Upgrade from 1.x to 2.0, or migrate from plain Context, Zustand, Redux, MMKV, or React Navigation theming.
 ---
+
+## Upgrading from 1.x to 2.0
+
+2.0 introduces a discriminated-union `SetThemeOptions` with short, per-variant
+field names; unifies `origin` / `originRef` into a single `origin`; replaces
+`invertedCircularReveal` with an `inverted` flag; and collapses the `useTheme`
+overloads into a single signature. Old call sites will fail to typecheck.
+
+### Renamed fields
+
+| 1.x | 2.0 |
+|---|---|
+| `{ transition: 'wipe', wipeDirection: 'up' }` | `{ transition: 'wipe', direction: 'up' }` |
+| `{ transition: 'slide', wipeDirection: 'left' }` | `{ transition: 'slide', direction: 'left' }` |
+| `{ transition: 'split', splitAxis: 'vertical' }` | `{ transition: 'split', axis: 'vertical' }` |
+| `{ transition: 'pixelize', pixelizeBlockSize: 64 }` | `{ transition: 'pixelize', blockSize: 64 }` |
+| `{ transition: 'dissolve', dissolveGrainSize: 8 }` | `{ transition: 'dissolve', grainSize: 8 }` |
+
+### Origin unified
+
+```tsx
+// 1.x — two separate fields with manual priority
+setTheme('dark', { transition: 'circularReveal', origin: { x, y }, originRef: ref });
+
+// 2.0 — single field, accepts point OR ref
+setTheme('dark', { transition: 'circularReveal', origin: { x: 100, y: 200 } });
+setTheme('dark', { transition: 'circularReveal', origin: ref });
+```
+
+### Inverted reveals
+
+```tsx
+// 1.x — separate transition type
+setTheme('dark', { transition: 'invertedCircularReveal' });
+
+// 2.0 — flag on the reveal variant
+setTheme('dark', { transition: 'circularReveal', inverted: true });
+```
+
+The `inverted` flag is also available on `heart` and `star` — the old theme
+shrinks into the shape instead of the new theme expanding out of it.
+
+### `useTheme` single signature
+
+```tsx
+// 1.x — overloaded, base vs. selection-tracking
+const { colors, setTheme } = useTheme();
+const { selected, select } = useTheme({ initialSelection: 'system' });
+
+// 2.0 — always returns the full shape
+const { colors, setTheme, selected, select } = useTheme();
+
+// `initialSelection` is now an optional seed override
+const { selected, select } = useTheme({ initialSelection: 'system' });
+```
+
+The `ThemeSelectionResult` type has been removed — `UseThemeResult` now
+contains `selected` and `select`.
+
+### New in 2.0
+
+- **Transitions**: `circularReveal`, `wipe`, `slide`, `split`, `heart`, `star`,
+  `pixelize`, `dissolve` — 8 new styles on top of the v1 `fade`. Every reveal
+  and shape transition also supports an `inverted` flag.
+- **`useReducedMotion()` hook**: read the OS Reduce Motion setting in your own UI
+- **`TRANSITION_TYPES`** runtime export: the canonical list, handy for pickers
+- **Config `animated`**: global opt-out for instant-switching apps
+- **Config `backgroundColor`**: function that picks the root background color
+  from the current theme, so the Skia snapshot path can't leak the Activity's
+  default window color through transparent regions on Android
+
+---
+
+## From another theme system
 
 The migration follows the same pattern regardless of your current approach:
 

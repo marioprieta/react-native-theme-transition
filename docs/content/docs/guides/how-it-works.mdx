@@ -3,10 +3,11 @@ title: How It Works
 description: The screenshot-overlay technique behind smooth theme transitions.
 ---
 
-The library captures a full-screen screenshot of the current UI, displays it as an
-opaque overlay, switches all color tokens underneath, then fades the overlay out on
-the native UI thread via Reanimated. The screenshot is taken **before** the color
-switch, so the transition is seamless.
+The library captures a full-screen snapshot of the current UI via Skia,
+displays it as an opaque overlay, switches all color tokens underneath,
+then animates the overlay away on the native UI thread via Reanimated.
+The snapshot is taken while the **old** colors are still visible, so the
+new theme is fully committed under the overlay before the animation starts.
 
 ## Sequence diagram
 
@@ -14,38 +15,47 @@ switch, so the transition is seamless.
 sequenceDiagram
     participant User
     participant Hook as setTheme()
-    participant Shot as ViewShot
+    participant Skia as Skia capture
     participant React as React Tree
     participant UI as UI Thread
 
     User->>Hook: setTheme('dark')
     Hook->>UI: Block touches (shared value → pointerEvents)
-    Hook->>Shot: Wait 2 frames, capture screen
-    Shot-->>Hook: Return image URI
-    Hook->>UI: Mount opaque overlay (screenshot)
-    UI-->>Hook: Image onLoad (bitmap decoded)
+    Hook->>Skia: Wait 2 frames, capture screen
+    Skia-->>Hook: SkImage
+    Hook->>UI: Mount opaque overlay (captured image)
     Note over Hook,UI: 1 frame — compositor paints overlay
+    Hook->>React: Swap color tokens
     Note over Hook,UI: 1 frame — React commits new theme
-    Hook->>React: Update color tokens
-    Hook->>UI: Fade overlay out (350ms via Reanimated)
-    UI-->>Hook: Animation complete (worklet callback)
+    Hook->>UI: Animate overlay (fade / reveal / wipe / ...)
+    UI-->>Hook: Animation complete
     Hook->>UI: Unblock touches, remove overlay
-    UI-->>User: Smooth cross-fade complete
+    UI-->>User: Transition complete
 ```
 
 ## Step by step
 
-1. `setTheme('dark')` is called
-2. Touches blocked instantly via a Reanimated shared value (no React re-render needed)
-3. Two frames wait for the JS → Shadow Tree → Native UI pipeline to fully paint pending state changes
-4. Full-screen screenshot captured via `react-native-view-shot`
-5. Screenshot displayed as an opaque overlay
-6. `Image.onLoad` confirms the bitmap is decoded (event-based, not frame-guessing)
-7. One frame for the compositor to paint the overlay on screen
-8. Color tokens switched underneath — the provider updates its React context with new tokens, all children re-render with new colors while the overlay is still opaque
-9. One frame for React to commit the new theme under the still-opaque overlay
-10. Overlay fades out on the UI thread via `react-native-reanimated` — the RN repaint pipeline completes during the first frames of the fade, when the overlay is still near-opaque
-11. Touches unblocked and overlay removed once the fade completes via a worklet callback (`react-native-worklets`)
+1. `setTheme('dark')` (or `select('dark')`) is called.
+2. Touches are blocked instantly via a Reanimated shared value — no React
+   re-render needed.
+3. The library waits 2 frames for the JS → Shadow Tree → Native UI pipeline
+   to fully paint any pending state changes (this is why `select()` defers
+   by one frame — so the pressed highlight ends up in the screenshot).
+4. A full-screen snapshot is captured via `@shopify/react-native-skia`.
+5. The snapshot is mounted as an opaque overlay on top of everything.
+6. One frame for the compositor to paint the overlay on screen.
+7. Color tokens are swapped underneath — the provider updates its React
+   context, all children re-render with the new colors while the overlay
+   is still opaque.
+8. One frame for React to commit the new theme under the still-opaque overlay.
+9. The overlay animates according to the selected transition style — a fade,
+   an expanding circle, a wipe, a shape clip, a pixelize/dissolve shader, etc.
+   All styles run on the UI thread via Reanimated.
+10. Touches are unblocked and the overlay is removed when the animation ends.
+
+> A **worklet** is a small JS function that Reanimated runs directly on the
+> UI thread — the library uses one to react to animation completion without
+> a JS-thread round trip.
 
 ## The frame pipeline
 
@@ -55,21 +65,35 @@ React Native renders in a pipeline:
 JS Thread → Shadow Tree → Native UI Thread
 ```
 
-Each stage takes ~1 frame (~16ms at 60Hz, ~8ms at 120Hz). The library uses `waitFrames`
-to ensure each stage completes before proceeding:
+Each stage takes ~1 frame (~16ms at 60Hz, ~8ms at 120Hz). The library uses
+`waitFrames` to ensure each stage completes before proceeding:
 
 - **2 frames before capture**: ensures pending state changes are fully painted
 - **1 frame after overlay mount**: ensures the compositor has painted the overlay
-- **1 frame after color switch**: ensures React has committed the new theme
+- **1 frame after color swap**: ensures React has committed the new theme
 
-The animation duration (default 350ms) is independent of frame rate and runs via Reanimated
-on the UI thread, matching the device's native refresh rate (60–120 FPS).
+The animation duration is independent of frame rate and runs on the UI thread,
+matching the device's native refresh rate (60–120 FPS).
 
 ## Why screenshots?
 
-Other approaches to theme transitions require native modules (custom iOS/Android code)
-to manipulate the view hierarchy directly. The screenshot approach works entirely in JS
-+ Reanimated, making it compatible with Expo Go and any React Native setup.
+Other approaches to theme transitions require custom iOS/Android code to
+manipulate the view hierarchy directly. The snapshot approach works entirely
+in JS + Reanimated + Skia, making it compatible with Expo Go and any React
+Native setup.
 
-The trade-off is that the overlay is static — dynamic content (videos, animations)
-will appear frozen during the ~350ms fade.
+The trade-off is that the overlay is a still image regardless of transition
+type — `fade`, `circularReveal`, `wipe`, `pixelize`, and every other style
+animate this same bitmap. Any dynamic content behind it (videos, Lottie,
+camera preview, live counters) will appear frozen for the transition's
+`duration`.
+
+## Reduced motion
+
+When the OS has Reduce Motion enabled and `reduceMotion: true` is set in
+config (the default), the library skips the snapshot / overlay step entirely
+and switches colors instantly. None of the transition callbacks fire in that
+path — only `onThemeChange`.
+
+Read the current value in your own UI with the exported `useReducedMotion()`
+hook if you want to adjust unrelated animations to match.

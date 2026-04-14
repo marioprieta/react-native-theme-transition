@@ -23,7 +23,7 @@ const PAD = 2;
 const MAX_TX = TRACK_W - THUMB - PAD * 2;
 
 export function ThemeToggle() {
-  const { selected, select, colors, isTransitioning } = useTheme({});
+  const { selected, select, colors, isTransitioning } = useTheme();
   const isDark = selected === 'dark';
 
   return (
@@ -68,16 +68,15 @@ export function ThemeToggle() {
 
 ## Key points
 
-- `useTheme({})` — not `useTheme()`. The toggle thumb is a selection indicator, so it needs selection tracking. `useTheme({})` defaults `initialSelection` to the current theme from context.
-- **Plain React styles only** — no Reanimated for the thumb position. The visual state must update in React's commit cycle so the screenshot captures the correct position.
-- `select()` updates `selected` immediately, then defers `setTheme` by one frame.
-- `select()` includes built-in press lock — if called during a transition, it's silently ignored. `disabled={isTransitioning}` provides visual feedback, but the internal lock prevents race conditions even without it.
-
-<Callout type="info">
-  **Rule of thumb:** any component whose visual state changes on theme switch
-  needs `useTheme({})`. The only component that can use `setTheme` directly is
-  a button whose content doesn't change (e.g., a plain "Switch theme" label).
-</Callout>
+- **`select()` instead of `setTheme()`** — the toggle thumb is a selection
+  indicator, so it needs transition-safe timing. `select()` updates the
+  highlight immediately and defers `setTheme` by one frame.
+- **Plain React styles only** — no Reanimated for the thumb position. The
+  visual state must update in React's commit cycle so the screenshot captures
+  the correct position.
+- `select()` includes a built-in press lock — if called during a transition,
+  it's silently ignored. `disabled={isTransitioning}` provides visual feedback,
+  but the internal lock prevents race conditions even without it.
 
 ## Why plain styles, not Reanimated?
 

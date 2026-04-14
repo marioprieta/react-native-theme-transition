@@ -41,14 +41,14 @@ export function ThemeButton() {
   is taken, the cross-fade will blend the dimmed state with the new theme, producing a visible flash.
 </Callout>
 
-## When to use this pattern
+## When to use `setTheme` vs `select`
 
-This is the only pattern where you can call `setTheme` directly. It works because:
+Call `setTheme` directly when the trigger has **no visual state that must
+match the screenshot** — a plain "Switch theme" button, a programmatic change
+from an effect, a deep link, a settings screen. `setTheme` is also the right
+call for any non-UI trigger (analytics, persistence, haptics).
 
-- The button's label is static ("Switch theme") — it doesn't change before the screenshot
-- There's no visual indicator (highlight, checkmark, thumb) that needs to be updated before the screenshot
-
-<Callout type="info">
-  If you add a visual indicator to the button (e.g., a colored border on the active theme),
-  switch to `useTheme({})` and use `select()` instead.
-</Callout>
+Use `select()` whenever a highlight, toggle thumb, pill, or checkmark reflects
+the chosen theme — it defers `setTheme` by one animation frame so the pressed
+state is painted before the screenshot is captured. See
+[Theme Picker](/docs/examples/theme-picker) for that pattern.

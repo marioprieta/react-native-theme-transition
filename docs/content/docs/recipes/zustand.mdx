@@ -153,9 +153,11 @@ function ThemeSettings() {
 
 <Callout type="warn">
   **Don't drive the picker highlight from the store.** Use `selected` from
-  `useTheme({ initialSelection })` — it updates synchronously before the
-  screenshot capture. Store state updates asynchronously and would show the
-  wrong highlight in the screenshot.
+  `useTheme()` — it updates synchronously before the screenshot capture.
+  Store state updates asynchronously and would show the wrong highlight in
+  the screenshot. Here we pass `{ initialSelection: colorMode }` only to
+  hydrate the initial highlight from Zustand on mount — after that, `selected`
+  is driven by `select()`.
 </Callout>
 
 ## Redux / Redux Toolkit

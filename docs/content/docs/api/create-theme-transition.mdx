@@ -25,9 +25,13 @@ const { ThemeTransitionProvider, useTheme } =
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `themes` | `Record<string, ThemeDefinition>` | *required* | Object of theme definitions. All themes must share the same color token keys. The name `'system'` is reserved. |
-| `duration` | `number` | `350` | Cross-fade animation duration in milliseconds. |
-| `darkThemes` | `Name[]` | `[systemThemeMap.dark]` or `['dark']` | Theme names that use a dark color scheme. The library calls `Appearance.setColorScheme` internally to keep native UI (alerts, date pickers) in sync. |
+| `animated` | `boolean` | `true` | Global default for animated switches. When `false`, every `setTheme` / `select` call switches instantly unless the caller opts in with `{ animated: true }`. |
+| `duration` | `number` | per-kind default | Default transition duration in ms. Per-kind defaults when omitted: 350ms for fade / reveal / strip, 800ms for shape (`heart`, `star`), 750ms for shader (`pixelize`, `dissolve`). |
+| `transition` | `TransitionType` | `'fade'` | Default transition style used when `setTheme` is called without a `transition` option. |
+| `reduceMotion` | `boolean` | `true` | Honor the OS "Reduce Motion" accessibility setting by falling back to an instant switch. Read the current value via the exported `useReducedMotion()` hook. |
+| `backgroundColor` | `(colors) => string` | first token | Picks the color painted behind the children tree as a fallback for any transparent region the Skia snapshot path can leave (e.g. the area below a scrolled `ScrollView` on Android). Defaults to the first token in the current theme. [See below.](#backgroundcolor) |
 | `systemThemeMap` | `{ light: Name, dark: Name }` | — | Maps OS appearance to theme names. Required when your themes are not named `'light'`/`'dark'` and you want system mode. |
+| `darkThemes` | `ThemeName[]` | `[systemThemeMap.dark]` or `['dark']` | Theme names that use a dark color scheme. Every entry must match a key in `themes`. The library calls `Appearance.setColorScheme` internally to keep native UI (alerts, date pickers) in sync. |
 | `onTransitionStart` | `(name: Name) => void` | — | Called when an animated transition begins, before screenshot capture. Does not fire for instant switches. |
 | `onTransitionEnd` | `(name: Name) => void` | — | Called after an animated transition completes. Does not fire for instant switches or capture failures. |
 | `onThemeChange` | `(name: Name) => void` | — | Called on every theme change — animated, instant, or system-driven. The only callback guaranteed to fire. |
@@ -82,22 +86,41 @@ Defaults to `[systemThemeMap.dark]` if `systemThemeMap` is provided, otherwise `
 In system mode the library sets `Appearance.setColorScheme('unspecified')` so the OS
 drives native appearance.
 
-## Type inference
+### backgroundColor
 
-You never need to pass generic types manually:
+Getter that picks the "root background" color from the current theme. The library
+paints this color behind your tree so any transparent regions produced while the
+Skia snapshot is rendered fall back to the theme's background instead of the
+Activity's default window color (which is typically white on Android).
 
 ```ts
-const light = { background: '#fff', text: '#000' };
-const dark  = { background: '#000', text: '#fff' };
-
-const { useTheme } = createThemeTransition({ themes: { light, dark } });
-
-const { colors, name, setTheme } = useTheme();
-
-colors.background  // type: string, autocomplete: 'background' | 'text'
-colors.foo         // TypeScript error
-name               // type: 'light' | 'dark'
-setTheme('dark')   // ok
-setTheme('ocean')  // TypeScript error
-setTheme('system') // always valid
+createThemeTransition({
+  themes: { light: { bg: '#fff', text: '#111' }, dark: { bg: '#000', text: '#fff' } },
+  backgroundColor: (colors) => colors.bg,
+});
 ```
+
+If you omit it, the library uses the first token in the current theme.
+
+> **ScrollView gotcha (Android):** don't put `backgroundColor` on a root
+> `ScrollView`'s `style` — Android's native drawing cache keeps off-screen
+> regions on the previous theme's color after a swap. Put it on
+> `contentContainerStyle` instead, or rely on this config option and leave the
+> ScrollView transparent. See [Troubleshooting](/docs/guides/troubleshooting).
+
+## Type inference
+
+You never need to pass generic types manually. See the full
+[type inference example](/docs/types#type-inference-example) for how theme
+names and token keys flow into `useTheme` automatically.
+
+## Validation errors
+
+`createThemeTransition` throws at initialization when config is invalid. Most common cases:
+
+- Empty `themes`
+- `'system'` used as a theme key
+- Theme token keys do not match across themes
+- Invalid `duration` (must be finite and non-negative)
+- Invalid `transition` value
+- `systemThemeMap` missing `light`/`dark` or pointing to unknown themes

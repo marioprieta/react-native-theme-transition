@@ -5,25 +5,26 @@ description: Smooth, animated theme transitions for React Native. Expo Go compat
 
 Theme transitions in React Native have always needed custom native modules. That means no Expo Go, no OTA updates, and extra maintenance for each platform.
 
-This library takes a different approach: capture a screenshot, overlay it, switch colors underneath, and fade out. The result is a smooth cross-fade that works everywhere, no native code needed. All peer dependencies ship with Expo Go (SDK 54+) — only `react-native-worklets` needs to be installed separately.
+This library takes a different approach: snapshot the current screen into a Skia Canvas, swap the theme underneath, and animate the captured snapshot away with a shader, a shape clip, or a simple cross-fade. The result is a set of smooth transitions that work everywhere, with no native code and no prebuild — every peer dependency ships with Expo Go.
 
 ## Features
 
-- **Smooth cross-fade transitions.** Screenshot-overlay technique powered by Reanimated on the native UI thread, matching your display's refresh rate (60–120 FPS).
-- **Expo Go compatible.** No native code, no prebuilds.
-- **Built-in theme management.** Provider, typed hooks, and deep generic inference out of the box.
-- **System theme sync.** Follows OS appearance automatically with zero-flash startup and runtime switching.
-- **Transition guard.** Blocks concurrent transitions and exposes `isTransitioning`.
+- **9 transition styles.** Fade, circular reveal, heart, star, wipe, slide, split, pixelize, dissolve — all configurable per call via a typed discriminated union. Every reveal-style transition also supports an inverted direction.
+- **Expo Go compatible.** No native code, no prebuilds. Powered by Skia and Reanimated, both ship with modern Expo SDKs.
+- **Typed theme management.** Provider, single `useTheme` hook with deep generic inference for theme names and token keys.
+- **System theme sync.** Follows OS appearance automatically with zero-flash startup and runtime switching. Respects Reduce Motion.
+- **Transition-safe selection.** `select()` defers state changes by one frame so picker highlights appear correctly in the captured screenshot.
+- **Transition guard.** Blocks concurrent transitions, exposes `isTransitioning`, never queues.
 - **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules).
-- **Tiny footprint.** ~13 kB runtime, zero runtime dependencies.
+- **Tiny footprint.** ~13 kB runtime, no vendored dependencies.
 
 ## Comparison
 
 | Feature | react-native-theme-transition | react-native-theme-switch-animation | Uniwind Pro | Unistyles 3 |
 |---|:---:|:---:|:---:|:---:|
-| Animated transition | Cross-fade | Fade/circular reveal | Native snapshot | None (instant) |
+| Animated transitions | 9 styles (fade, reveal, wipe, split, shapes, shaders) | Fade / circular reveal | Native snapshot | None (instant) |
 | Expo Go support | Yes | No (prebuild) | No (prebuild) | No (prebuild) |
-| Execution | Pure JS / Reanimated + Worklets | Native modules | C++ engine | C++ (ShadowTree) |
+| Execution | Skia + Reanimated | Native modules | C++ engine | C++ (ShadowTree) |
 | Theme state management | Provider + typed hooks | Bring your own | Built-in | Built-in |
 | TypeScript generics | Deep inference | Basic | Auto-generated | Manual override |
 | System theme listener | Built-in | Not included | Built-in | Adaptive themes |
@@ -31,13 +32,13 @@ This library takes a different approach: capture a screenshot, overlay it, switc
 
 ## Trade-offs
 
-- **No interaction during transitions.** Touches, scrolls, and additional `setTheme` calls are blocked while the fade is running. Use `isTransitioning` to disable buttons.
-- **Static overlay.** The transition uses a screenshot, so dynamic content (videos, animations, live counters) will appear frozen during the fade.
+- **No interaction during transitions.** Touches, scrolls, and additional `setTheme` calls are blocked while the animation is running. Use `isTransitioning` to disable buttons.
+- **Static overlay.** The transition uses a captured snapshot, so dynamic content (videos, animations, live counters) will appear frozen while the overlay is visible.
 
 ## Requirements
 
 - React >= 18.0.0
 - React Native >= 0.76
 - react-native-reanimated >= 4.0.0
-- react-native-view-shot >= 3.0.0
+- @shopify/react-native-skia >= 2.4.0
 - react-native-worklets >= 0.5.0

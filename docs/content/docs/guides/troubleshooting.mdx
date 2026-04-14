@@ -11,14 +11,17 @@ cross-fade — the selection indicator alternates between old and new positions.
 **Cause:** Calling `setSelected()` and `setTheme()` in the same event handler doesn't
 give React enough time to paint the selection before the screenshot captures.
 
-**Fix:** Use `useTheme({ initialSelection })`:
+**Fix:** Use `select()` instead of calling `setSelected()` + `setTheme()` directly:
 
 ```tsx
-const { selected, select, colors, isTransitioning } =
-  useTheme({ initialSelection: 'system' });
+const { selected, select, colors, isTransitioning } = useTheme();
 
 <Pressable onPress={() => select(option)} disabled={isTransitioning}>
 ```
+
+`select()` and `setTheme()` come back from every `useTheme()` call — no options form
+required. Pass `{ initialSelection: 'system' }` only if you want the initial
+`selected` to start as `'system'` instead of the current theme name.
 
 See [Theme Picker example](/docs/examples/theme-picker) for the complete pattern.
 
@@ -53,10 +56,10 @@ See [State Managers](/docs/recipes/zustand) for the full pattern.
 **Symptom:** On iOS, a native `<Switch>` thumb appears mid-slide in the screenshot.
 
 **Cause:** iOS's UISwitch runs a ~250ms Core Animation with no completion callback.
-`react-native-view-shot` captures the on-screen visual state including the thumb mid-slide.
+The Skia snapshot captures the on-screen visual state — including the thumb mid-slide.
 
-**Fix:** Use a [custom toggle](/docs/examples/theme-toggle) with `useTheme({})` and
-plain React styles (no Reanimated).
+**Fix:** Use a [custom toggle](/docs/examples/theme-toggle) built with `select()`
+and plain React styles (no Reanimated).
 
 ---
 
@@ -66,7 +69,7 @@ plain React styles (no Reanimated).
 
 **Check:**
 - Look for `[react-native-theme-transition] Failed to capture screenshot` in the console
-- Verify `react-native-view-shot` is properly installed (`npx expo doctor`)
+- Verify `@shopify/react-native-skia` is properly installed (`npx expo doctor`)
 - Ensure the root `View` has `collapsable={false}` (set internally)
 
 ---
@@ -75,12 +78,51 @@ plain React styles (no Reanimated).
 
 **Causes:**
 
-1. **`animated: false`** — Check if you're passing `{ animated: false }` in options
-2. **Provider placement** — `ThemeTransitionProvider` must wrap the full visible tree
-3. **`react-native-view-shot` not installed** — `captureRef` throws, falls back to instant switch
-4. **Missing worklets plugin** — `react-native-worklets/plugin` must be the last plugin in `babel.config.js`
+1. **`animated: false`** — Check if you're passing `{ animated: false }` in options, or if config-level `animated: false` is set
+2. **Reduce Motion enabled** — iOS Settings → Accessibility → Motion → Reduce Motion. The library honors it by default. Set `reduceMotion: false` in config to opt out
+3. **Provider placement** — `ThemeTransitionProvider` must wrap the full visible tree
+4. **`@shopify/react-native-skia` not installed** — screenshot capture throws, falls back to instant switch
+5. **Missing worklets plugin** — `react-native-worklets/plugin` must be the last plugin in `babel.config.js`
 
 **Fix:** Verify provider placement, peer dependencies, and babel config. Restart with `npx expo start -c`.
+
+---
+
+## Reveal starts from the wrong place
+
+**Symptom:** `circularReveal` (or `heart` / `star`) animates from the center
+of the screen instead of where the user tapped.
+
+**Causes:**
+
+1. **Ref unmounted** — the view the `origin` ref points to was unmounted between
+   the tap and the capture (e.g. it lives inside a `Modal` that closes during
+   the transition). Use an explicit `{ x, y }` point instead, or make sure the
+   ref's host view stays mounted until the transition ends.
+2. **Ref points outside the provider** — only views rendered inside
+   `ThemeTransitionProvider` are measured correctly. Views in portals / modals
+   at the root may fall outside.
+3. **Measurement failed silently** — if `measure()` returns no coordinates,
+   the library falls back to the center of the screen.
+
+---
+
+## My transition picker is missing the new types
+
+**Symptom:** Your own transition picker UI hardcodes the list and is missing
+`heart`, `star`, `pixelize`, `dissolve`, or new variants added later.
+
+**Fix:** Import the canonical list instead of hardcoding it:
+
+```ts
+import { TRANSITION_TYPES } from 'react-native-theme-transition';
+
+{TRANSITION_TYPES.map((t) => (
+  <Pressable key={t} onPress={() => setTheme('dark', { transition: t })}>
+    <Text>{t}</Text>
+  </Pressable>
+))}
+```
 
 ---
 
@@ -193,6 +235,46 @@ system mode stops following the OS.
 was in progress, the overlay cleanup may not fire.
 
 **Fix:** Perform a full reload (`Cmd+R` / `R R`). This only affects development.
+
+---
+
+## Android: light-colored strip shows behind content on theme change
+
+**Symptom:** On Android, when you change the theme, a region of the screen — usually
+content that lives below the initial fold of a root `ScrollView` — briefly flashes
+the *initial* theme's background color (e.g. a light `#F5F5F7` showing through
+during a `dark → ocean` transition). iOS is fine.
+
+**Cause:** Native Android `ScrollView` caches its `backgroundColor` in the view's
+drawing cache. When you set `backgroundColor` directly on the `ScrollView`'s
+`style` prop, Android only invalidates the visible rect on theme changes —
+off-screen content (anything below the fold) keeps the cached color until the
+user scrolls and forces a full redraw.
+
+**Fix:** Don't put `backgroundColor` on the `ScrollView` itself. Move it to
+`contentContainerStyle` (which is an ordinary `View`, with no drawing cache quirk)
+and add `minHeight: '100%'` so short content still fills the viewport:
+
+```tsx
+// ❌ Don't — native ScrollView drawing cache on Android
+<ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
+
+// ✅ Do — plain View inside the ScrollView
+<ScrollView
+  style={{ flex: 1 }}
+  contentContainerStyle={{
+    backgroundColor: colors.background,
+    minHeight: '100%',
+  }}
+>
+```
+
+The same rule applies to `FlatList` and `SectionList` — use `contentContainerStyle`,
+not `style`, for theme-reactive backgrounds.
+
+Note: the library already paints its own root background behind the tree using the
+[`backgroundColor`](/docs/api/create-theme-transition#backgroundcolor) config
+option, so in many apps you don't need a background on the scroll view at all.
 
 ---
 

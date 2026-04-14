@@ -1,23 +1,25 @@
 ---
 title: useTheme
-description: Hook returning the current theme state, transition controls, and optional selection tracking.
+description: Hook returning the current theme state, transition controls, and selection tracking.
 ---
 
-Returns the current theme state and a function to trigger transitions.
-Throws if called outside a `ThemeTransitionProvider`.
+Returns the current theme state, transition controls, and selection tracking in
+a single object. Throws if called outside a `ThemeTransitionProvider`.
 
 ## Basic usage
 
 ```ts
-const { colors, name, setTheme, isTransitioning } = useTheme();
+const { colors, name, setTheme, isTransitioning, selected, select } = useTheme();
 ```
 
 | Property | Type | Description |
 |---|---|---|
 | `colors` | `{ [token]: string }` | Current theme's color values, fully typed to your token names. |
 | `name` | `ThemeName` | Active theme name (resolved, never `'system'`). |
-| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger transition or enter system mode. Returns `true` if accepted, `false` if rejected. |
-| `isTransitioning` | `boolean` | `true` from after the screenshot is captured until the fade ends. |
+| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger a theme change. Returns `true` if state changed, `false` if no-op. |
+| `isTransitioning` | `boolean` | `true` while a transition overlay is visible. |
+| `selected` | `ThemeName \| 'system'` | Currently selected option (for picker UIs). |
+| `select` | `(option, opts?) => void` | Select a theme with transition-safe timing. |
 
 ### Color tokens
 
@@ -35,7 +37,7 @@ the actual theme (`'light'` or `'dark'`, or whatever `systemThemeMap` resolves t
 
 ### Transition state
 
-`true` from after the screenshot is captured until the fade completes. Touch input
+`true` from after the screenshot is captured until the transition animation completes. Touch input
 is blocked immediately when `setTheme` is called, regardless of this flag.
 Use it to:
 - Disable toggle buttons (`disabled={isTransitioning}`)
@@ -58,52 +60,85 @@ Use it to:
 
 ### Transition options
 
+`SetThemeOptions` is a discriminated union: the `transition` field selects a
+variant and the valid extra fields depend on it. See
+[`SetThemeOptions`](/docs/types#setthemeoptions) for the full table.
+
+**Common fields (every variant):**
+
 | Option | Default | Description |
 |---|---|---|
-| `animated` | `true` | `false` for instant switch, no screenshot or animation |
-| `onTransitionStart` | — | Fires after config-level callback, animated only |
-| `onTransitionEnd` | — | Fires after config-level callback, animated only |
+| `animated` | `config.animated ?? true` | `false` for instant switch, no screenshot or animation |
+| `duration` | `config.duration` (or per-kind default) | Override transition duration in ms |
+| `easing` | `Easing.out(Easing.cubic)` | Any Reanimated `EasingFunction` |
+| `onTransitionStart` | — | Per-call start callback (fires after config-level) |
+| `onTransitionEnd` | — | Per-call end callback (fires after config-level) |
+
+**Per-transition extras:** `origin` + `inverted` for reveals, `direction` for
+wipe/slide, `axis` for split, `blockSize` for pixelize, `grainSize` for
+dissolve. TypeScript rejects invalid combinations at compile time.
 
 ```ts
+// Default fade
+setTheme('dark');
+
+// Circular reveal from a pressed button with haptic feedback
 setTheme('dark', {
+  transition: 'circularReveal',
+  origin: buttonRef,
   onTransitionStart: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
 });
+
+// Wipe to the right, 500ms
+setTheme('dark', { transition: 'wipe', direction: 'right', duration: 500 });
+
+// Inverted heart — old theme shrinks into a heart
+setTheme('dark', { transition: 'heart', origin: ref, inverted: true });
 ```
 
 ### Behavior rules
 
-1. **Same theme** — returns `false` (no-op)
-2. **During transition** — returns `false` (no queue, no error). System mode is **not** activated even if `'system'` was passed — retry after `isTransitioning` becomes `false`
+1. **Same theme and same mode** — returns `false` (no-op)
+2. **During transition** — returns `false` (rapid-press guard, no queue). Wait
+   for `isTransitioning` to become `false` before retrying — bind the retry
+   to a `useEffect` watching the flag rather than polling.
 3. **`'system'`** — enters system-following mode, subscribes to OS changes
 4. **Explicit name** — exits system-following mode
-5. **`animated: false`** — instant switch, only `onThemeChange` fires
+5. **`animated: false`** (or config-level) — instant switch, only `onThemeChange` fires
 6. **Capture failure** — falls back to instant switch, `onTransitionEnd` skipped
 
 ---
 
 ## Selection tracking
 
-When building theme selection UIs (button groups, toggles, checkmark lists),
-pass an options object to activate **selection tracking** with transition-safe timing.
+`selected` and `select` come back from every `useTheme()` call — you don't need to
+opt in. Use them whenever your UI has a visual indicator that follows the chosen
+theme (highlighted button, toggle thumb, checkmark).
+
+### When to use `setTheme` vs `select`
+
+| Use... | When |
+|---|---|
+| `setTheme(name, opts)` | Programmatic changes, non-UI triggers, or when you don't care about a "pressed" highlight |
+| `select(option, opts)` | User-driven picker UIs where a press highlight needs to animate with the transition |
+
+`select` defers `setTheme` by one animation frame so the pressed state paints
+before the screenshot is captured — the highlight ends up frozen in the overlay
+and travels with the animation instead of popping in mid-transition.
+
+### `initialSelection` override
 
 ```ts
-const { colors, name, setTheme, isTransitioning, selected, select } =
-  useTheme({ initialSelection: 'system' });
+const { selected, select } = useTheme({ initialSelection: 'system' });
 ```
-
-| Extra property | Type | Description |
-|---|---|---|
-| `selected` | `ThemeName \| 'system'` | Currently selected option (may be `'system'`). |
-| `select` | `(option) => void` | Select a theme with transition-safe timing. |
-
-### Initial selection value
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `initialSelection` | `ThemeName \| 'system'` | current theme name | Starting value for `selected` (read once) |
+| `initialSelection` | `ThemeName \| 'system'` | current theme name | Starting value for `selected` (read once, like `useState`) |
 
-`initialSelection` seeds the initial `selected` state. When omitted, defaults to the
-current theme name from context.
+By default, `selected` is seeded with the current theme name. Pass
+`initialSelection` only when you want it to start as `'system'` or a value that
+differs from `name` (e.g. hydrating from a persisted store).
 
 ### Transition-safe timing
 
@@ -118,21 +153,6 @@ captures the screenshot. `select` solves this by:
 If `select()` is called during a transition, it's silently ignored (returns without action).
 Add `disabled={isTransitioning}` to your Pressable for visual feedback — but even without it,
 the internal lock prevents race conditions.
-
-### When to use which
-
-<Callout type="info">
-  If your component has a visual indicator that changes on theme switch (highlighted
-  button, toggle thumb, checkmark), use `useTheme({})` or `useTheme({ initialSelection })`.
-  If your component just reads colors or has a static label, plain `useTheme()` is sufficient.
-</Callout>
-
-| Scenario | Call |
-|---|---|
-| Segmented picker with system option | `useTheme({ initialSelection: 'system' })` |
-| Dark mode toggle | `useTheme({})` — defaults to current theme |
-| Checkmark list with system | `useTheme({ initialSelection: 'system' })` |
-| Static "Switch theme" button | `useTheme()` — no selection tracking needed |
 
 ### Local state caveat
 

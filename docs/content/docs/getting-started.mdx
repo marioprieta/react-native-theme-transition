@@ -7,10 +7,10 @@ description: Install react-native-theme-transition and configure your project.
 
 <Tabs items={['Expo (SDK 54+)', 'Expo (SDK < 54)', 'React Native CLI']}>
   <Tab value="Expo (SDK 54+)">
-    Reanimated and view-shot are already included in Expo Go.
+    Reanimated and Skia are already included in Expo Go.
 
     ```bash
-    npx expo install react-native-theme-transition react-native-worklets
+    npx expo install react-native-theme-transition @shopify/react-native-skia react-native-worklets
     ```
 
     <Callout type="info">
@@ -21,12 +21,12 @@ description: Install react-native-theme-transition and configure your project.
   </Tab>
   <Tab value="Expo (SDK < 54)">
     ```bash
-    npx expo install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
+    npx expo install react-native-theme-transition @shopify/react-native-skia react-native-reanimated react-native-worklets
     ```
   </Tab>
   <Tab value="React Native CLI">
     ```bash
-    npm install react-native-theme-transition react-native-reanimated react-native-view-shot react-native-worklets
+    npm install react-native-theme-transition @shopify/react-native-skia react-native-reanimated react-native-worklets
     ```
 
     Then install iOS pods:

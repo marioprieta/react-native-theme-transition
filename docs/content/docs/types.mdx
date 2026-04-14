@@ -9,13 +9,29 @@ import type {
   ThemeTransitionConfig,
   ThemeTransitionAPI,
   UseThemeResult,
-  ThemeSelectionResult,
   SystemThemeMap,
   SetThemeOptions,
+  SelectOptions,
+  OriginSpec,
+  TransitionOrigin,
+  TransitionType,
   ThemeNames,
   TokenNames,
 } from 'react-native-theme-transition';
 ```
+
+The library also exports two **runtime** values alongside these types:
+
+```ts
+import { TRANSITION_TYPES, useReducedMotion } from 'react-native-theme-transition';
+```
+
+- `TRANSITION_TYPES` — readonly array of every `TransitionType`, handy for
+  pickers and validation without hardcoding the list.
+- `useReducedMotion()` — hook returning `true` while the OS "Reduce Motion"
+  accessibility setting is enabled. The library honors this internally when
+  `reduceMotion: true` is set in config (the default); use the hook if you
+  want your own components to react to the setting too.
 
 ## Types
 
@@ -59,7 +75,11 @@ Configuration for `createThemeTransition`. See [API Reference](/docs/api/create-
 | Field | Type | Description |
 |---|---|---|
 | `themes` | `T` | All themes keyed by name |
-| `duration` | `number?` | Cross-fade duration (default 350) |
+| `animated` | `boolean?` | Default animation on/off (default `true`) |
+| `duration` | `number?` | Default transition duration in ms. Falls back to per-kind defaults when omitted (350 fade/reveal/strip, 800 shape, 750 shader) |
+| `transition` | `TransitionType?` | Default transition style (default `'fade'`) |
+| `reduceMotion` | `boolean?` | Honor OS reduce-motion setting (default `true`) |
+| `backgroundColor` | `(colors) => string` | Root background color getter — defaults to the first token in the current theme |
 | `darkThemes` | `ThemeNames<T>[]?` | Themes using dark color scheme for native UI sync |
 | `systemThemeMap` | `SystemThemeMap?` | OS appearance mapping |
 | `onTransitionStart` | `(name) => void` | Animated transition start |
@@ -72,33 +92,79 @@ Return type of `createThemeTransition`. Contains `ThemeTransitionProvider` and `
 
 ### `UseThemeResult<Tokens, Names>`
 
-Base return type of `useTheme()`.
+The return type of `useTheme()`. Contains everything you need to read colors, change the theme, and build selection UIs.
 
 | Field | Type | Description |
 |---|---|---|
 | `colors` | `Record<Tokens, string>` | Current color values |
 | `name` | `Names` | Active theme name (never `'system'`) |
-| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger transition |
-| `isTransitioning` | `boolean` | Cross-fade in progress |
-
-### `ThemeSelectionResult<Names>`
-
-Extra fields returned by `useTheme({ initialSelection })`.
-
-| Field | Type | Description |
-|---|---|---|
-| `selected` | `Names \| 'system'` | Currently selected option |
-| `select` | `(option) => void` | Select with transition-safe timing |
+| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger a theme change |
+| `isTransitioning` | `boolean` | Transition overlay is visible |
+| `selected` | `Names \| 'system'` | Currently selected option (for picker UIs) |
+| `select` | `(option, opts?) => void` | Select a theme with transition-safe timing |
 
 ### `SetThemeOptions<Names>`
 
-Options for `setTheme`.
+Discriminated union on `transition`. The fields available depend on which transition you choose — TypeScript will only accept combinations valid for the picked type.
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `animated` | `boolean` | `true` | Use animation |
-| `onTransitionStart` | `(name) => void` | — | Per-call start callback |
-| `onTransitionEnd` | `(name) => void` | — | Per-call end callback |
+| Common field | Type | Description |
+|---|---|---|
+| `animated` | `boolean?` | Override config-level animation flag |
+| `duration` | `number?` | Override duration for this call |
+| `easing` | `(t: number) => number` | Reanimated easing function |
+| `onTransitionStart` | `(name) => void` | Per-call start callback |
+| `onTransitionEnd` | `(name) => void` | Per-call end callback |
+
+| When `transition` is... | Extra field | Type |
+|---|---|---|
+| `'circularReveal'`, `'heart'`, `'star'` | `origin` | `OriginSpec` (point `{x,y}` or `ref`) — defaults to screen center |
+| `'circularReveal'`, `'heart'`, `'star'` | `inverted` | `boolean` — by default the new theme grows from the origin outward; when `true`, the old theme shrinks into the origin point instead (default `false`) |
+| `'wipe'`, `'slide'` | `direction` | `'left' \| 'right' \| 'up' \| 'down'` (default `'left'`) |
+| `'split'` | `axis` | `'horizontal' \| 'vertical'` (default `'horizontal'`) |
+| `'pixelize'` | `blockSize` | `number` — max block size in points (default `52`) |
+| `'dissolve'` | `grainSize` | `number` — noise cell size in points (default `5`) |
+
+```ts
+// Default fade
+setTheme('dark')
+
+// Wipe from the right with custom duration
+setTheme('dark', { transition: 'wipe', direction: 'right', duration: 500 })
+
+// Circular reveal from a button, old theme shrinks inward
+const btnRef = useRef<View>(null)
+setTheme('dark', { transition: 'circularReveal', origin: btnRef, inverted: true })
+
+// Pixelize with a custom block size
+setTheme('dark', { transition: 'pixelize', blockSize: 32 })
+```
+
+### `SelectOptions<Names>`
+
+Same as `SetThemeOptions` minus `animated` and callbacks — `select()` manages those internally.
+
+### `OriginSpec`
+
+```ts
+type OriginSpec = { x: number; y: number } | React.RefObject<View | null>
+```
+
+Either an explicit point or a ref whose center will be measured.
+
+### `TransitionType`
+
+```ts
+type TransitionType =
+  | 'fade'
+  | 'circularReveal'
+  | 'wipe' | 'slide' | 'split'
+  | 'heart' | 'star'
+  | 'pixelize' | 'dissolve'
+```
+
+The `TRANSITION_TYPES` runtime constant is also exported — handy for building a transition picker without hardcoding the list.
+
+`TransitionType` is derived from `TRANSITION_META`, so adding a new transition in source updates both the type union and `TRANSITION_TYPES`.
 
 ## Type inference example
 
@@ -122,8 +188,10 @@ setTheme('system')// always valid
 
 | Building... | Import |
 |---|---|
-| A theme picker component | `ThemeSelectionResult`, `UseThemeResult` |
+| A theme picker component | `UseThemeResult`, `SelectOptions` |
 | A ThemeBridge component | `ThemeNames` |
-| Passing options to setTheme | `SetThemeOptions` |
+| Passing options to `setTheme` | `SetThemeOptions` |
 | Typing the config object | `ThemeTransitionConfig` |
 | Working with system theme mapping | `SystemThemeMap` |
+| Custom transition origin | `OriginSpec`, `TransitionOrigin` |
+| Enumerating transition styles | `TransitionType`, `TRANSITION_TYPES` |

@@ -4,8 +4,7 @@ description: Segmented control with selection tracking and iOS-safe timing.
 ---
 
 A horizontal segmented control where the active theme is highlighted.
-Uses `useTheme({ initialSelection })` for flicker-free selection and
-rapid-press protection.
+Uses `select()` for flicker-free selection and rapid-press protection.
 
 ```tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -50,7 +49,7 @@ export function ThemePicker() {
 
 ## Key points
 
-- `useTheme({ initialSelection: 'system' })` — starts with "system" highlighted
+- `useTheme({ initialSelection: 'system' })` — seeds `selected` to `'system'` on first render. Without the override, `selected` defaults to the current theme name.
 - `select(option)` updates the highlight **before** the screenshot, then defers `setTheme` by one `requestAnimationFrame`
 - `isTransitioning` disables all buttons during the cross-fade
 - Plain `style={{...}}` — no Reanimated, no `({ pressed }) => ...`

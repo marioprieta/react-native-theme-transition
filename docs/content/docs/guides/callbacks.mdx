@@ -9,18 +9,17 @@ description: Exact sequence of callbacks for animated transitions, instant switc
 1.  Touch blocking starts (shared value, instant)
 2.  Config onTransitionStart(name)
 3.  Per-call onTransitionStart(name)
-4.  Screenshot captured
-5.  Overlay mounted
-6.  Image onLoad (bitmap decoded)
-7.  Overlay paints (1 frame)
-8.  Colors switched underneath
-9.  React commits new theme (1 frame)
-10. Fade animation starts (duration ms)
-11. Transition guards reset, touch unblocked
-12. Config onTransitionEnd(name)
-13. Per-call onTransitionEnd(name)
-14. Config onThemeChange(name)
-15. Next render: isTransitioning → false, overlay unmounted
+4.  Selection highlight settles (1–2 frames)
+5.  Snapshot captured into a Skia image
+6.  Overlay commits the snapshot (1–2 frames for the Canvas paint)
+7.  Theme colors swapped underneath
+8.  Inner tree repaints with the new theme (1 frame, hidden by overlay)
+9.  Overlay animation starts (duration ms) — fade, reveal, shape, shader, …
+10. Transition guards reset, touch unblocked
+11. Config onTransitionEnd(name)
+12. Per-call onTransitionEnd(name)
+13. Config onThemeChange(name)
+14. Next render: isTransitioning → false, overlay cleared
 ```
 
 ## Instant switch (`animated: false`)

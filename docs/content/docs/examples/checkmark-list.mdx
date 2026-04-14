@@ -4,7 +4,7 @@ description: iOS Settings-style list picker with checkmark indicators.
 ---
 
 An iOS Settings-style list where the selected theme shows a checkmark.
-Uses `useTheme({ initialSelection })` for flicker-free selection and system mode support.
+Uses `select()` for flicker-free selection and system mode support.
 
 ```tsx
 import { View, Text, Pressable } from 'react-native';
@@ -59,7 +59,7 @@ export function ThemeList() {
 
 ## Key points
 
-- `useTheme({ initialSelection: 'system' })` — starts with "System" checked
+- `useTheme({ initialSelection: 'system' })` — seeds `selected` to `'system'` so "System" is checked on first render
 - The checkmark is a selection indicator, so it needs `select()` — not direct `setTheme`
 - `select()` updates the checkmark position before the screenshot capture
 - `isTransitioning` disables the list during cross-fade
