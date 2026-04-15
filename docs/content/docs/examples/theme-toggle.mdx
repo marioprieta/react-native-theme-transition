@@ -1,86 +1,104 @@
 ---
 title: Theme Toggle
-description: Custom switch component for light/dark toggling with transition-safe timing.
+description: A custom light/dark switch with transition-safe timing, built on plain React styles.
 ---
 
-A custom toggle switch that replaces the native `<Switch>` component.
+A custom toggle that replaces the native `<Switch>`. The thumb
+position reads `theme.scheme` (the binary `'light' | 'dark'` flag
+the library exposes), so derived state paints in the same commit as
+the tap, and the engine's 1-frame settle before capture lets that
+paint land before the snapshot.
 
 <Callout type="warn">
-  **Do not use the native `<Switch>` for theme toggling.** iOS's UISwitch runs
-  a ~250ms Core Animation with no completion callback. The screenshot captures
-  the thumb mid-slide, causing visible flickering. See
-  [Troubleshooting](/docs/guides/troubleshooting#native-switch-flickers) for details.
+  Don't use the native React Native `<Switch>` for theme toggling.
+  iOS `UISwitch` runs a ~250 ms Core Animation with no completion
+  callback, so the snapshot catches the thumb mid-slide and the
+  result flickers. Build your own toggle with plain styles.
 </Callout>
 
-```tsx
-import { View, Text, Pressable } from 'react-native';
-import { useTheme } from '@/lib/theme';
+## Example
 
-const TRACK_W = 50;
-const TRACK_H = 30;
-const THUMB = 26;
-const PAD = 2;
-const MAX_TX = TRACK_W - THUMB - PAD * 2;
+```tsx
+import { Pressable, Text, View } from 'react-native'
+import { useTheme } from '@/lib/theme'
+
+const TRACK_W = 50
+const TRACK_H = 30
+const THUMB = 26
+const PAD = 2
+const MAX_TX = TRACK_W - THUMB - PAD * 2
 
 export function ThemeToggle() {
-  const { selected, select, colors, isTransitioning } = useTheme();
-  const isDark = selected === 'dark';
+  const { theme, setTheme, isTransitioning } = useTheme()
+  const isDark = theme.scheme === 'dark'
 
   return (
     <Pressable
-      onPress={() => select(isDark ? 'light' : 'dark')}
       disabled={isTransitioning}
+      onPress={() => setTheme(isDark ? 'light' : 'dark')}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingVertical: 12,
         paddingHorizontal: 16,
-        backgroundColor: colors.card,
+        backgroundColor: theme.colors.card,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: theme.colors.border,
       }}
     >
-      <Text style={{ fontSize: 16, color: colors.text }}>Dark Mode</Text>
+      <Text style={{ fontSize: 16, color: theme.colors.text }}>Dark Mode</Text>
       <View
         style={{
-          width: TRACK_W, height: TRACK_H,
-          borderRadius: TRACK_H / 2, padding: PAD,
+          width: TRACK_W,
+          height: TRACK_H,
+          borderRadius: TRACK_H / 2,
+          padding: PAD,
           justifyContent: 'center',
-          backgroundColor: isDark ? colors.primary : colors.border,
+          backgroundColor: isDark ? theme.colors.primary : theme.colors.border,
         }}
       >
         <View
           style={{
-            width: THUMB, height: THUMB, borderRadius: THUMB / 2,
+            width: THUMB,
+            height: THUMB,
+            borderRadius: THUMB / 2,
             backgroundColor: '#fff',
-            shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.2, shadowRadius: 2, elevation: 2,
+            elevation: 2,
+            shadowColor: '#000',
+            shadowOpacity: 0.2,
+            shadowOffset: { width: 0, height: 1 },
+            shadowRadius: 2,
             transform: [{ translateX: isDark ? MAX_TX : 0 }],
           }}
         />
       </View>
     </Pressable>
-  );
+  )
 }
 ```
 
-## Key points
+## Why `theme.scheme` Instead of `theme.name`
 
-- **`select()` instead of `setTheme()`** — the toggle thumb is a selection
-  indicator, so it needs transition-safe timing. `select()` updates the
-  highlight immediately and defers `setTheme` by one frame.
-- **Plain React styles only** — no Reanimated for the thumb position. The
-  visual state must update in React's commit cycle so the screenshot captures
-  the correct position.
-- `select()` includes a built-in press lock — if called during a transition,
-  it's silently ignored. `disabled={isTransitioning}` provides visual feedback,
-  but the internal lock prevents race conditions even without it.
+For a binary dark/light toggle, `theme.scheme` is the right signal:
+it's always `'light'` or `'dark'`, even when you have three or four
+themes defined. `theme.name` works too if you only have `light` and
+`dark`, but the moment you add an `ocean` or `rose`, toggling
+against `theme.name === 'dark'` stops making sense.
 
-## Why plain styles, not Reanimated?
+## Why Plain Styles, Not Reanimated
 
-Reanimated's `useAnimatedStyle` + `useEffect` → `sharedValue` adds 1+ frames of
-latency (JS → UI thread). The screenshot capture can fire before the native view
-updates. Plain styles update in the same React commit as `select`, matching the
-pattern that works for the picker and checkmark list.
+Reanimated's `useAnimatedStyle` + `useEffect` → `sharedValue` adds at
+least one frame of latency (JS → UI thread). The snapshot can fire
+before the native view catches up, and the toggle thumb ends up
+mid-slide in the captured image. Plain styles update inside React's
+commit, so the snapshot catches the final position. Same pattern
+applies to the [Theme Picker](/docs/examples/theme-picker) and the
+[Checkmark List](/docs/examples/checkmark-list).
+
+## See Also
+
+- [Theme Picker](/docs/examples/theme-picker). Segmented control built around `preference`.
+- [Theme Button](/docs/examples/theme-button). Minimal cycle-button without state.
+- [useTheme](/docs/api/use-theme). The hook reference.

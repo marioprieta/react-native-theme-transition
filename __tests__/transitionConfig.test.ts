@@ -25,6 +25,27 @@ describe('createThemeTransition — transition config', () => {
     ).not.toThrow()
   })
 
+  it('accepts strip transitions (wipe, slide, split)', () => {
+    expect(() =>
+      createThemeTransition({ themes: { light, dark }, transition: 'wipe' }),
+    ).not.toThrow()
+    expect(() =>
+      createThemeTransition({ themes: { light, dark }, transition: 'slide' }),
+    ).not.toThrow()
+    expect(() =>
+      createThemeTransition({ themes: { light, dark }, transition: 'split' }),
+    ).not.toThrow()
+  })
+
+  it('accepts shader transitions (pixelize, dissolve)', () => {
+    expect(() =>
+      createThemeTransition({ themes: { light, dark }, transition: 'pixelize' }),
+    ).not.toThrow()
+    expect(() =>
+      createThemeTransition({ themes: { light, dark }, transition: 'dissolve' }),
+    ).not.toThrow()
+  })
+
   it('rejects removed transition: "invertedCircularReveal" (use { inverted: true })', () => {
     expect(() =>
       createThemeTransition({

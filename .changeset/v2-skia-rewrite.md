@@ -2,76 +2,170 @@
 "react-native-theme-transition": major
 ---
 
-**v2: Skia engine rewrite, 9 transition styles, richer per-call options.**
+**v2: Skia engine, 9 transitions, radically simpler API.**
 
-The engine now snapshots the inner tree into a Skia Canvas and animates the
-captured image away with one of nine styles: `fade`, `circularReveal`,
-`wipe`, `slide`, `split`, `heart`, `star`, `pixelize`, `dissolve`. Every
-reveal and shape transition accepts an `inverted` flag; strip transitions
-accept `direction` / `axis`; shaders accept `blockSize` / `grainSize`.
-`SetThemeOptions` is now a discriminated union — TypeScript only allows
-fields valid for the picked transition.
+The engine was rebuilt on top of `@shopify/react-native-skia`. The provider
+now snapshots the inner tree into a pre-mounted Skia Canvas, swaps the theme
+underneath, and animates the captured frame away with one of nine transition
+styles. The public API was re-shaped around a four-field hook and a
+discriminated options union.
 
-### Breaking — peer dependency
+The hook now splits two orthogonal concepts: `theme` is always concrete
+(the theme currently painted on screen), and `preference` is the user's
+raw pick (which can be `'system'`). No more `isSystemMode` flags, no
+more "picker state vs active theme" duality.
 
-`react-native-view-shot` is replaced by `@shopify/react-native-skia`
-(>= 2.0.0). Update your install:
+### Breaking: peer dependencies
+
+`react-native-view-shot` is replaced by `@shopify/react-native-skia` (>= 2.0.0):
 
 ```bash
 npm uninstall react-native-view-shot
 npm install @shopify/react-native-skia
 ```
 
-No code changes required if you don't set `transition` explicitly — the
-default remains `'fade'` and every call site keeps compiling.
+Minimum versions for the surrounding stack were also raised:
 
-### New features
+| Peer | v1 minimum | v2 minimum |
+|---|---|---|
+| `react` | `>=18.0.0` | `>=19.0.0` |
+| `react-native` | `>=0.76.0` | `>=0.78.0` |
+| `react-native-reanimated` | `>=4.0.0` | `>=4.0.0` |
+| `react-native-worklets` | `>=0.5.0` | `>=0.5.0` |
+| `react-native-view-shot` | `>=3.0.0` | **removed** |
+| `@shopify/react-native-skia` | **new** | `>=2.0.0` |
 
-- **`transition`** per call, 9 values: `fade`, `circularReveal`, `wipe`,
-  `slide`, `split`, `heart`, `star`, `pixelize`, `dissolve`.
-- **`origin`** accepts a point `{ x, y }` or a `React.RefObject<View>` —
-  the library measures the ref's center at press time so reveals start
-  from exactly where the user tapped.
-- **`inverted`** on `circularReveal`, `heart`, `star`, `split` — flips the
-  animation direction (shape shrinks, strips close inward, etc.).
-- **`direction`** (`'left' | 'right' | 'up' | 'down'`) on `wipe` and `slide`.
-- **`axis`** (`'horizontal' | 'vertical'`) on `split`.
-- **`blockSize`** on `pixelize`, **`grainSize`** on `dissolve`.
-- **`easing`** per call — any Reanimated `EasingFunction`.
-- **Config `backgroundColor`**: `(colors) => string` picker for the root
-  background color. Prevents the Activity's default window color from
-  leaking through any transparent region the Skia snapshot path leaves
-  (notably the area below a scrolled `ScrollView` on Android).
-- **Config `animated`**: global opt-out for apps that prefer instant
-  switches by default.
-- **`useReducedMotion()`** hook — read the OS "Reduce Motion" setting for
-  your own UI. The library already honors it automatically when
-  `reduceMotion` (config) is `true`.
-- **`TRANSITION_TYPES`** and **`TRANSITION_META`** runtime exports — the
-  canonical list of transitions and their metadata (`kind`, `needsOrigin`,
-  `invertible`, `capturesNew`, `defaultDuration`). Use them to build
-  transition pickers that adapt their options to the selected style
-  without hardcoding a list.
+React 19 and React Native 0.78 are hard requirements: v2 reads context
+via React 19's `use()` hook, and `@shopify/react-native-skia` 2.0 itself
+declares `react: ">=19.0"` and `react-native: ">=0.78"` as peer
+dependencies. Apps on older React or React Native versions need to
+upgrade before installing v2.
 
-### Behavior changes
+### Breaking: `useTheme` return shape
 
-- **`select()` no longer reverts `selected` on rejection.** When a call
-  is rejected (mid-transition, same theme, etc.) the optimistic selection
-  is left in place; the mid-tap flicker back to the previous pill is
-  gone. Any real mismatch is corrected on the next successful tap.
-- **`useTheme` is a single signature** — always returns the full shape
-  including `selected` and `select`. The v1 overload split and
-  `ThemeSelectionResult` type are removed; `UseThemeResult` now contains
-  everything.
-- **Per-kind duration defaults**: 350ms for `fade` / `circularReveal` /
-  `wipe` / `slide` / `split`, 800ms for `heart` / `star`, 750ms for
-  `pixelize` / `dissolve`. Explicit `duration` (per call or at config
-  level) overrides all of them.
-- **Faster transitions**: direct `SkImage` capture replaces the v1
-  view-shot → URI → RN `<Image>` decode pipeline, shaving roughly 30ms
-  off every swap.
+```ts
+// v1
+const { colors, name, setTheme, isTransitioning, selected, select } = useTheme()
+
+// v2
+const { theme, preference, setTheme, isTransitioning } = useTheme()
+// theme.name: Names  (always concrete, never 'system')
+// theme.colors: Record<Tokens, string>
+// theme.scheme: 'light' | 'dark'
+// preference: Names | 'system'  (the user's raw pick)
+```
+
+`colors` and `name` moved under `theme`, and `theme.scheme` is a new
+binary `'light' | 'dark'` classifier derived from `darkThemes`.
+`preference` is a brand-new top-level field that mirrors the user's
+raw pick (including `'system'`) and updates synchronously inside
+`setTheme` so pickers can drop their optimistic local state. `selected`,
+`select`, `initialSelection`, `SelectOptions`, `UseThemeOptions`, and
+`useReducedMotion` are gone. The engine's internal `settleBeforeCapture`
+gives React batching time to paint before the snapshot is taken, so no
+hook magic is needed. See the [Migration guide](https://react-native-theme-transition.vercel.app/docs/recipes/migration).
+
+### Breaking: `setTheme` return type
+
+```ts
+// v1
+setTheme('dark'): boolean
+
+// v2
+setTheme('dark'): 'accepted' | 'ignored'
+```
+
+`'accepted'` means the library will apply the change (instantly or via an
+animated transition). `'ignored'` means nothing will happen (already
+transitioning, or same theme in the same mode). Most callers don't need
+the return value; reactive state (`isTransitioning`, callbacks) is
+usually enough.
+
+### Breaking: removed config options
+
+- **`reduceMotion`**: removed. The library no longer honors OS Reduce
+  Motion: these are brief color transitions, not spatial motion, and instant
+  swaps are arguably more jarring than a 350ms fade. Consumers who want
+  to honor the OS setting write their own `AccessibilityInfo` listener
+  and pass `animated: false` per call.
+- **`duration`**: removed from config. Each transition family has its own
+  calibrated default (350ms fade / reveal / strip, 800ms shape, 750ms
+  shader). A global override would flatten that calibration. Override
+  per call with `setTheme(name, { duration: 400 })` when you need it.
+- **`backgroundColor`**: removed. The library now auto-picks a token
+  literally named `background` from the active theme as the root
+  fallback color (with a silent fallback to the first token if absent).
+  Rename your bg token to `background` to opt in.
+
+### Breaking: renamed option fields
+
+| v1 | v2 |
+|---|---|
+| `{ transition: 'split', axis: 'horizontal' }` | `{ transition: 'split', mode: 'top-bottom' }` |
+| `{ transition: 'split', axis: 'vertical' }`   | `{ transition: 'split', mode: 'left-right' }` |
+| `{ transition: 'dissolve', grainSize: 5 }`    | `{ transition: 'dissolve', noiseSize: 5 }` |
+| `{ transition: 'invertedCircularReveal' }`    | `{ transition: 'circularReveal', inverted: true }` |
+
+The `diamond` transition proposed in early v2 work was removed before
+shipping; only the 9 below are supported.
+
+### Breaking: `direction` semantics unified (wipe + slide)
+
+In v1, `direction: 'right'` meant "sweep rightward" on `wipe` but "new
+enters from the right" on `slide`: two opposite visual meanings for the
+same string. In v2 both transitions share the same rule: `direction: 'right'`
+is the direction the motion is heading, so the new theme enters from the
+LEFT edge and sweeps rightward. Default is `'right'`.
+
+### New transitions
+
+On top of v1's `fade`, v2 adds eight new styles:
+
+- **`circularReveal`**: expanding circle from any origin (point or ref).
+- **`heart`**: a heart-shaped clip grows from the origin.
+- **`star`**: a 5-point star clip grows from the origin.
+- **`wipe`**: a directional edge sweeps across the screen.
+- **`slide`**: both old and new slide across like a carousel.
+- **`split`**: the screen parts or shutters along `mode`.
+- **`pixelize`**: shader crossfade through a shared pixel grid.
+- **`dissolve`**: noise-threshold disintegration.
+
+Every reveal / shape transition accepts `inverted`. `SetThemeOptions` is a
+discriminated union: TypeScript only accepts the extra fields valid for
+the chosen `transition`.
+
+### New: `TRANSITION_META` runtime export
+
+The same table that drives the type union is exported so consumers can
+build transition pickers that adapt their UI without hardcoding the list:
+
+```ts
+import { TRANSITION_META, TRANSITION_TYPES } from 'react-native-theme-transition'
+
+const meta = TRANSITION_META[transition]
+// meta.kind           : 'fade' | 'reveal' | 'shape' | 'strip' | 'shader'
+// meta.needsOrigin    : whether to show an origin picker
+// meta.invertible     : whether to show an "inverted" toggle
+// meta.capturesNew    : whether the engine needs a second snapshot (slide / pixelize)
+// meta.defaultDuration
+```
+
+### Internal changes worth noting
+
+- Cleanup is driven by Reanimated's `withTiming` completion callback via
+  `scheduleOnRN`. No more `setTimeout(finish, duration + 50)`. Callbacks
+  fire at the exact end frame on every device.
+- `settleTreeRepaint` is gated to reveal / shape / capturesNew transitions
+  so fade / wipe / split / dissolve save a frame of start latency.
+- `OverlayParams` and the `DEFAULT_*` constants live in
+  `src/overlay/types.ts` as a single source of truth for the engine and
+  the overlay.
+- `darkThemes` config is now validated at init (unknown names throw).
+- Faster transitions: direct `SkImage` capture replaces the v1
+  view-shot to URI to RN `<Image>` decode pipeline, shaving roughly
+  30ms off every swap.
 
 ### Migration
 
-For a step-by-step upgrade guide see the
-[Migration recipe](https://react-native-theme-transition.vercel.app/docs/recipes/migration).
+Full walkthrough at
+[recipes/migration](https://react-native-theme-transition.vercel.app/docs/recipes/migration).

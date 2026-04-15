@@ -1,40 +1,51 @@
 ---
 title: React Navigation
-description: Sync theme colors with React Navigation and Expo Router.
+description: Sync theme colors with React Navigation and Expo Router so headers, tab bars, and screen backgrounds follow the active theme.
 ---
+
+React Navigation has its own theme system, with a `dark` flag and a
+`colors` object that drives header backgrounds, tab bars, screen
+content backgrounds, and `<Link>` colors. This recipe wires the
+library's `theme` into that shape so everything stays in sync.
 
 ## React Navigation
 
-Map your color tokens to React Navigation's theme shape:
+Map the library's tokens onto React Navigation's theme shape and
+pass it to `NavigationContainer`.
 
 ```tsx
-import { useMemo } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { useTheme } from '@/lib/theme';
+import { useMemo } from 'react'
+import { DefaultTheme, NavigationContainer, type Theme } from '@react-navigation/native'
+import { useTheme } from '@/lib/theme'
 
-function ThemedNavigation({ children }) {
-  const { colors, name } = useTheme();
+function ThemedNavigation({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme()
 
-  const navTheme = useMemo(() => ({
-    dark: name === 'dark',
-    colors: {
-      primary: colors.primary,
-      background: colors.background,
-      card: colors.card,
-      text: colors.text,
-      border: colors.border,
-      notification: colors.primary,
-    },
-  }), [colors, name]);
+  const navTheme: Theme = useMemo(
+    () => ({
+      dark: theme.scheme === 'dark',
+      colors: {
+        primary: theme.colors.primary,
+        background: theme.colors.background,
+        card: theme.colors.card,
+        text: theme.colors.text,
+        border: theme.colors.border,
+        notification: theme.colors.primary,
+      },
+      fonts: DefaultTheme.fonts,
+    }),
+    [theme],
+  )
 
-  return <NavigationContainer theme={navTheme}>{children}</NavigationContainer>;
+  return <NavigationContainer theme={navTheme}>{children}</NavigationContainer>
 }
 ```
 
-`useMemo` prevents creating a new theme object on every render, which would cause
-React Navigation to re-diff and re-layout all screens unnecessarily.
+`useMemo` prevents a new theme object on every render; otherwise
+React Navigation re-diffs and re-mounts every screen.
 
-Place inside the theme provider:
+Place the themed navigator inside the library's provider so the
+snapshot capture includes everything below:
 
 ```tsx
 <ThemeTransitionProvider initialTheme="system">
@@ -44,39 +55,46 @@ Place inside the theme provider:
 </ThemeTransitionProvider>
 ```
 
-## Expo Router
-
-With Expo Router, use `ThemeProvider` from `@react-navigation/native`:
-
 <Callout type="info">
-  These examples use `name === 'dark'` for simplicity. If your app has
-  custom dark-ish themes (e.g. `'ocean'`, `'midnight'`), define a set
-  and check membership: `const DARK_THEMES = new Set(['dark', 'ocean']); dark: DARK_THEMES.has(name)`.
+  Use `theme.scheme` for React Navigation's `dark` flag. It's always
+  `'light'` or `'dark'`, regardless of how many themes you define or
+  whether the user is in system mode. No per-theme membership check
+  needed even with custom dark themes like `'midnight'` or `'ocean'`
+  (declare them via `darkThemes` in the config).
 </Callout>
 
+## Expo Router
+
 ```tsx title="app/_layout.tsx"
-import { ThemeProvider } from '@react-navigation/native';
-import { ThemeTransitionProvider, useTheme } from '@/lib/theme';
-import { Stack } from 'expo-router';
+import { useMemo } from 'react'
+import { DefaultTheme, ThemeProvider, type Theme } from '@react-navigation/native'
+import { Stack } from 'expo-router'
+import { ThemeTransitionProvider, useTheme } from '@/lib/theme'
 
 function InnerLayout() {
-  const { colors, name } = useTheme();
+  const { theme } = useTheme()
+
+  const navTheme: Theme = useMemo(
+    () => ({
+      dark: theme.scheme === 'dark',
+      colors: {
+        primary: theme.colors.primary,
+        background: theme.colors.background,
+        card: theme.colors.card,
+        text: theme.colors.text,
+        border: theme.colors.border,
+        notification: theme.colors.primary,
+      },
+      fonts: DefaultTheme.fonts,
+    }),
+    [theme],
+  )
 
   return (
-    <ThemeProvider value={{
-      dark: name === 'dark',
-      colors: {
-        primary: colors.primary,
-        background: colors.background,
-        card: colors.card,
-        text: colors.text,
-        border: colors.border,
-        notification: colors.primary,
-      },
-    }}>
+    <ThemeProvider value={navTheme}>
       <Stack screenOptions={{ headerShown: false }} />
     </ThemeProvider>
-  );
+  )
 }
 
 export default function RootLayout() {
@@ -84,6 +102,25 @@ export default function RootLayout() {
     <ThemeTransitionProvider initialTheme="system">
       <InnerLayout />
     </ThemeTransitionProvider>
-  );
+  )
 }
 ```
+
+<Callout type="warn">
+  `ThemeProvider` from `@react-navigation/native` is **non-optional**
+  on iOS if you want the safe-area zones (top status bar, bottom home
+  indicator) to follow your theme. React Navigation's native-stack
+  reads `colors.background` from this provider and applies it as the
+  Screen container's background. Without it, `react-native-screens`
+  paints the OS system color in the safe-area zones.
+</Callout>
+
+See [Expo Router](/docs/recipes/expo-router) for the full
+walkthrough including `GestureHandlerRootView`, `StatusBar`, and
+nesting order.
+
+## See Also
+
+- [Expo Router](/docs/recipes/expo-router). Full root-layout walkthrough.
+- [useTheme](/docs/api/use-theme). The hook reference.
+- [Migration from React Navigation theming](/docs/recipes/migration#from-react-navigation-theming-only). If you're coming from a stand-alone React Navigation theme.

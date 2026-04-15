@@ -5,10 +5,6 @@ jest.mock('react-native', () => ({
     setColorScheme: jest.fn(),
     addChangeListener: jest.fn(() => ({ remove: jest.fn() })),
   },
-  AccessibilityInfo: {
-    isReduceMotionEnabled: jest.fn(() => Promise.resolve(false)),
-    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
-  },
   AppState: {
     currentState: 'active',
     addEventListener: jest.fn(() => ({ remove: jest.fn() })),

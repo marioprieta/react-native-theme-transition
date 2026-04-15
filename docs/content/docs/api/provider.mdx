@@ -4,7 +4,7 @@ description: Provider component that supplies animated theme colors via context.
 ---
 
 Wraps your app tree and provides the theme context. Place as high as possible
-in the component tree — above navigation, above modals. The screenshot captures
+in the component tree: above navigation, above modals. The screenshot captures
 everything inside the provider's root `View`.
 
 ```tsx
@@ -32,7 +32,7 @@ everything inside the provider's root `View`.
 Content outside the provider won't be included in the transition screenshot.
 
 ```tsx
-// Correct — navigation inside provider
+// Correct: navigation inside provider
 <ThemeTransitionProvider initialTheme="system">
   <NavigationContainer>
     ...
@@ -41,7 +41,7 @@ Content outside the provider won't be included in the transition screenshot.
 ```
 
 ```tsx
-// Wrong — provider inside navigation, only captures current screen
+// Wrong: provider inside navigation, only captures current screen
 <NavigationContainer>
   <ThemeTransitionProvider initialTheme="system">
     ...
@@ -54,3 +54,9 @@ Content outside the provider won't be included in the transition screenshot.
   their backdrop is captured in the screenshot. React Native's built-in `Modal`
   renders in a separate native window and won't be captured.
 </Callout>
+
+## See Also
+
+- [createThemeTransition](/docs/api/create-theme-transition). Factory that produces this provider.
+- [useTheme](/docs/api/use-theme). Hook for reading the current theme inside the tree.
+- [Quick Start](/docs/quick-start). Minimal setup walkthrough.

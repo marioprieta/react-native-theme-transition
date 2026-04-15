@@ -7,6 +7,28 @@ describe('transition metadata', () => {
     expect(typeKeys).toEqual(metaKeys)
   })
 
+  it('exposes exactly the 9 v2 transition types', () => {
+    expect(TRANSITION_TYPES).toHaveLength(9)
+    expect(TRANSITION_TYPES).toEqual(
+      expect.arrayContaining([
+        'fade',
+        'circularReveal',
+        'wipe',
+        'slide',
+        'split',
+        'heart',
+        'star',
+        'pixelize',
+        'dissolve',
+      ]),
+    )
+  })
+
+  it('does not expose the removed `diamond` transition', () => {
+    expect(TRANSITION_TYPES).not.toContain('diamond' as never)
+    expect(TRANSITION_META).not.toHaveProperty('diamond')
+  })
+
   it('marks reveal and shape transitions as origin-dependent', () => {
     expect(TRANSITION_META.circularReveal.needsOrigin).toBe(true)
     expect(TRANSITION_META.heart.needsOrigin).toBe(true)

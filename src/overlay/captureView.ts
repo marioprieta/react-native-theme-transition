@@ -18,10 +18,14 @@ export async function captureView(ref: RefObject<View | null>): Promise<SkImage 
   try {
     const gpuImage = await makeImageFromView(ref)
     if (!gpuImage) return null
-    // Convert to CPU-backed so it can render in a separate GL context (Canvas).
-    const cpuImage = gpuImage.makeNonTextureImage()
-    gpuImage.dispose()
-    return cpuImage
+    // Convert to CPU-backed so the snapshot renders in a separate GL
+    // context (Skia Canvas). `finally` guarantees the GPU image is
+    // released even if the conversion throws.
+    try {
+      return gpuImage.makeNonTextureImage()
+    } finally {
+      gpuImage.dispose()
+    }
   } catch {
     return null
   }

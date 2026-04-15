@@ -1,37 +1,28 @@
 ---
 title: State Managers
-description: Bridge pattern for Zustand, Redux, and MMKV.
+description: Use Zustand, Redux, or MMKV to persist the user's theme pick across app launches.
 ---
 
-The library owns animated transition state internally. External state managers
-handle **persistence** — not transitions. Every call site that changes the theme
-must call both `select()`/`setTheme()` (library) and the store setter (persistence).
-The bridge component only syncs the persisted preference on hydration.
-If you only call `select()`, the theme changes but the preference isn't saved. If you only
-call the store setter, the preference is saved but no transition occurs (the hydration-only
-bridge only runs once on app start).
-
-<Callout type="warn">
-  **Don't use a reactive bridge with `select()`.** A bridge that calls `setTheme`
-  on every store change races with `select()`'s deferred timing — the bridge's
-  `useEffect` fires before `select()`'s `requestAnimationFrame`, stealing the
-  transition and reverting the pill. Use a **hydration-only bridge** instead.
-</Callout>
+The library owns transition state. External stores handle
+**persistence**: where the user's pick (`'light' | 'dark' | 'system'`)
+lives across app restarts. The pattern is the same for every store:
+read the persisted value, pass it as `initialTheme`, and on press call
+`setTheme` and the store setter together in the same handler.
 
 ## Zustand
 
 ### Store
 
 ```ts title="stores/theme-store.ts"
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
-export type ColorMode = 'system' | 'light' | 'dark';
+export type ColorMode = 'system' | 'light' | 'dark'
 
 interface ThemeState {
-  colorMode: ColorMode;
-  setColorMode: (mode: ColorMode) => void;
+  colorMode: ColorMode
+  setColorMode: (mode: ColorMode) => void
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -45,200 +36,162 @@ export const useThemeStore = create<ThemeState>()(
       storage: createJSONStorage(() => AsyncStorage),
     },
   ),
-);
+)
 ```
 
-### Root layout
+### Root Layout
+
+Wait for Zustand to hydrate before mounting the provider, then pass
+the persisted value as `initialTheme`. No bridge component is needed.
 
 ```tsx title="app/_layout.tsx"
-import { useEffect } from 'react';
-import { ThemeTransitionProvider, useTheme } from '@/lib/theme';
-import { useThemeStore } from '@/stores/theme-store';
+import { useEffect, useState } from 'react'
+import { ThemeTransitionProvider } from '@/lib/theme'
+import { useThemeStore } from '@/stores/theme-store'
 
 export default function RootLayout() {
-  const colorMode = useThemeStore((s) => s.colorMode);
+  const [hydrated, setHydrated] = useState(useThemeStore.persist.hasHydrated())
+
+  useEffect(
+    () => useThemeStore.persist.onFinishHydration(() => setHydrated(true)),
+    [],
+  )
+
+  if (!hydrated) return null // or your splash component
+
+  const colorMode = useThemeStore.getState().colorMode
 
   return (
     <ThemeTransitionProvider initialTheme={colorMode}>
-      <ThemeBridge />
       <App />
     </ThemeTransitionProvider>
-  );
-}
-
-/** Syncs persisted Zustand preference on hydration — not on every change. */
-function ThemeBridge() {
-  const { setTheme } = useTheme();
-
-  useEffect(() => {
-    const sync = () => setTheme(useThemeStore.getState().colorMode);
-    if (useThemeStore.persist.hasHydrated()) {
-      sync();
-    }
-    return useThemeStore.persist.onFinishHydration(sync);
-  }, [setTheme]);
-
-  return null;
+  )
 }
 ```
 
-`onFinishHydration` is a Zustand persist API that fires once after the store loads its
-persisted value from storage. `hasHydrated()` returns `true` if hydration already completed.
-Together, they cover both cases: "hydration finished before mount" and "hydration finishes after mount".
+### Settings Screen
 
-<Callout type="info">
-  Native UI elements (alerts, date pickers, keyboards) are automatically kept in
-  sync by the library via `Appearance.setColorScheme`. No manual calls needed —
-  just configure `darkThemes` in `createThemeTransition` if you have custom dark themes.
-</Callout>
-
-### Settings screen
-
-The picker calls `select()` for the visual transition and `setColorMode()` for
-persistence — both in `onPress`, no bridge involved.
+Call both `setTheme` (animates and updates `preference`) and
+`setColorMode` (persists) in the same handler. Drive the highlight
+from `preference`. It updates synchronously inside `setTheme`, so
+no local state is needed.
 
 ```tsx
-import { View, Text, Pressable } from 'react-native';
-import { useTheme } from '@/lib/theme';
-import { useThemeStore } from '@/stores/theme-store';
+import { View, Text, Pressable } from 'react-native'
+import { useTheme } from '@/lib/theme'
+import { useThemeStore } from '@/stores/theme-store'
 
-const OPTIONS = ['system', 'light', 'dark'] as const;
+const OPTIONS = ['system', 'light', 'dark'] as const
 
 function ThemeSettings() {
-  const colorMode = useThemeStore((s) => s.colorMode);
-  const setColorMode = useThemeStore((s) => s.setColorMode);
-  const { colors, isTransitioning, selected, select } = useTheme({
-    initialSelection: colorMode,
-  });
+  const { theme, preference, setTheme, isTransitioning } = useTheme()
+  const setColorMode = useThemeStore((s) => s.setColorMode)
 
   return (
     <View style={{ flexDirection: 'row', gap: 8 }}>
-      {OPTIONS.map((mode) => (
+      {OPTIONS.map((option) => (
         <Pressable
-          key={mode}
-          onPress={() => {
-            select(mode);
-            setColorMode(mode);
-          }}
+          key={option}
           disabled={isTransitioning}
+          onPress={() => {
+            setTheme(option)
+            setColorMode(option)
+          }}
           style={{
             flex: 1,
             padding: 12,
             borderRadius: 8,
             alignItems: 'center',
             backgroundColor:
-              mode === selected ? colors.primary : 'transparent',
+              preference === option ? theme.colors.primary : 'transparent',
           }}
         >
-          <Text style={{ color: mode === selected ? '#fff' : colors.text }}>
-            {mode}
+          <Text
+            style={{ color: preference === option ? '#fff' : theme.colors.text }}
+          >
+            {option}
           </Text>
         </Pressable>
       ))}
     </View>
-  );
+  )
 }
 ```
 
-### Why hydration-only?
-
-| Concern | How it's handled |
-|---|---|
-| Hydration timing | `hasHydrated()` + `onFinishHydration` covers both "already hydrated" and "not yet" |
-| First render before hydration | Gets Zustand's default (`'system'`). ThemeBridge corrects behind the splash screen |
-| Pill highlight source | `selected` from `useTheme({ initialSelection })` — not `colorMode` from Zustand |
-| Persistence | `setColorMode()` runs alongside `select()` in `onPress`. AsyncStorage persists in background |
-| No race condition | ThemeBridge only calls `setTheme` once on hydration. Picker changes go through `select()` only |
-| Screen remount | `useTheme({ initialSelection: colorMode })` re-initializes `selected` from the store |
-
-<Callout type="warn">
-  **Don't drive the picker highlight from the store.** Use `selected` from
-  `useTheme()` — it updates synchronously before the screenshot capture.
-  Store state updates asynchronously and would show the wrong highlight in
-  the screenshot. Here we pass `{ initialSelection: colorMode }` only to
-  hydrate the initial highlight from Zustand on mount — after that, `selected`
-  is driven by `select()`.
+<Callout type="info">
+  `preference` updates synchronously before the engine's
+  `SETTLE.beforeCapture` window, so the highlight paints before the
+  snapshot runs. Reading the pill from the store directly would lag
+  and show the wrong highlight during the transition.
 </Callout>
 
 ## Redux / Redux Toolkit
 
-Same hydration-only pattern. The bridge reads the store once on mount:
-
-```tsx
-import { useEffect, useRef } from 'react';
-import { useSelector, useStore } from 'react-redux';
-import { useTheme } from '@/lib/theme';
-
-function ThemeBridge() {
-  const store = useStore<RootState>();
-  const { setTheme } = useTheme();
-  const didSync = useRef(false);
-
-  useEffect(() => {
-    if (didSync.current) return;
-    didSync.current = true;
-    setTheme(store.getState().theme.colorMode);
-  }, [store, setTheme]);
-
-  return null;
-}
-```
-
-Redux Provider must wrap `ThemeTransitionProvider`:
+Same pattern. Read the persisted `colorMode` from the store and pass
+it as `initialTheme`:
 
 ```tsx
 <Provider store={store}>
   <ThemeTransitionProvider initialTheme={store.getState().theme.colorMode}>
-    <ThemeBridge />
     <App />
   </ThemeTransitionProvider>
 </Provider>
 ```
 
-The settings screen follows the same pattern as Zustand — call `select()` + `dispatch(setColorMode(mode))` together in `onPress`.
+In the settings screen, call `setTheme(option)` and
+`dispatch(setColorMode(option))` together in `onPress`, and read
+`preference` from `useTheme()` for the highlight.
 
 ## MMKV
 
 <Callout type="warn">
-  MMKV requires native modules and is **not compatible with Expo Go**. Use a
-  [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+  MMKV requires native modules and is **not compatible with Expo Go**.
+  Use a [development build](https://docs.expo.dev/develop/development-builds/introduction/)
   or the bare workflow.
 </Callout>
 
-MMKV reads are synchronous, so no bridge is needed — pass the stored value
-directly as `initialTheme`:
+MMKV reads are synchronous, so you can read the persisted value
+inline without a hydration step.
 
 ```ts title="hooks/useStoredTheme.ts"
-import { useMMKVString } from 'react-native-mmkv';
+import { useMMKVString } from 'react-native-mmkv'
 
 export function useStoredTheme() {
-  const [value, setValue] = useMMKVString('themePreference');
-  const colorMode = (value ?? 'system') as 'system' | 'light' | 'dark';
-  return { colorMode, setColorMode: setValue };
+  const [value, setValue] = useMMKVString('themePreference')
+  const colorMode = (value ?? 'system') as 'system' | 'light' | 'dark'
+  return { colorMode, setColorMode: setValue }
 }
 ```
 
 ```tsx title="app/_layout.tsx"
-import { useStoredTheme } from '@/hooks/useStoredTheme';
+import { useStoredTheme } from '@/hooks/useStoredTheme'
+import { ThemeTransitionProvider } from '@/lib/theme'
 
 export default function RootLayout() {
-  const { colorMode } = useStoredTheme();
+  const { colorMode } = useStoredTheme()
 
   return (
     <ThemeTransitionProvider initialTheme={colorMode}>
       <App />
     </ThemeTransitionProvider>
-  );
+  )
 }
 ```
 
-Settings screen — same pattern: `select()` + `setColorMode()` in `onPress`.
+Settings screen, same pattern: `setTheme(option)` and
+`setColorMode(option)` together in `onPress`.
 
 ## Comparison
 
 | | Zustand | Redux | MMKV |
 |---|---|---|---|
 | Storage | AsyncStorage (async) | AsyncStorage (async) | MMKV (sync) |
-| Bridge needed? | Yes (hydration-only) | Yes (hydration-only) | No |
-| Bridge mechanism | `onFinishHydration` | `useRef` + `useEffect` | N/A — pass `initialTheme` directly |
+| Wait for hydration? | Yes | Yes (or read on mount) | No |
 | Expo Go compatible? | Yes | Yes | No |
+| Setup complexity | Low | Medium | Low (after install) |
+
+## See Also
+
+- [Persisted Preference](/docs/recipes/persistence). The AsyncStorage-only version.
+- [Theme Picker](/docs/examples/theme-picker). The picker UI built around `preference`.
+- [useTheme](/docs/api/use-theme). The hook reference.

@@ -1,9 +1,14 @@
 /**
  * Skia-powered overlay for theme transitions.
  *
- * All modes driven by a single 0→1 progress SharedValue.
- * Shape transitions use usePathInterpolation for zero-allocation
- * native C++ path interpolation between pre-computed keyframes.
+ * @remarks
+ * Top-level `SkiaOverlay` keeps a `<Canvas>` permanently mounted (so
+ * starting a transition never pays for a native-view layout pass on
+ * Android) and dispatches to a per-mode component that owns the
+ * `useDerivedValue` hooks for that mode only. The active mode's hooks
+ * mount when the transition starts and unmount when it ends. `fade`
+ * never pays for `slide`'s slot machine, `pixelize` never pays for
+ * `heart`'s path interpolation, etc.
  *
  * @module
  * @internal
@@ -26,33 +31,75 @@ import { useMemo } from 'react'
 import type { SharedValue } from 'react-native-reanimated'
 import { useDerivedValue } from 'react-native-reanimated'
 import { ABSOLUTE_FILL } from '../constants'
-import type { TransitionType } from '../types'
+import type { WipeDirection } from '../transitionMeta'
+import type { OverlayParams } from './types'
+
+/** @internal Frozen style for the Canvas. Hoisted so JSX never reallocates. */
+const CANVAS_STYLE = [ABSOLUTE_FILL, { pointerEvents: 'none' as const }]
+/** @internal Static input domain for `usePathInterpolation`. */
+const KEYFRAME_INPUT = [0, 1]
+
+// ───────────────────────────── Path builders ──────────────────────────────
 
 /**
- * Builds a heart path with a deeper notch (0.55) so the concave top-center
- * reaches the screen top at scale 1.0 (no scale factor needed).
- * @internal
+ * @internal Empirically tuned heart bezier reach factors. The bounding
+ * math in `useHeartSize` reads these to compute the smallest scale at
+ * which the path covers every screen corner. Kept next to the path
+ * builder so the bounds and the curve stay in sync when either is
+ * tweaked.
  */
-function makeHeartPath(cx: number, cy: number, w: number, h: number) {
+const HEART_REACH = {
+  /** Bottom tip y-distance from `cy`, in heart-units. */
+  bottomTip: 0.7,
+  /** Top notch dip from `cy`, in heart-units (negative y). */
+  topNotch: 0.55,
+  /** Outer lobe x-reach in heart-units. */
+  lobeX: 1.2,
+  /** Outer lobe y-reach above `cy`, in heart-units. */
+  lobeY: 0.9,
+  /** Bezier control x for the inner curve into the bottom tip. */
+  innerLobeX: 0.7,
+  /** Y-reach factor for the bottom corners (`+y` direction). */
+  bottomCornerY: 0.65,
+  /** Y-reach factor for the top corners (`-y` direction, lobe rises higher). */
+  topCornerY: 0.75,
+} as const
+
+function makeHeartPath(cx: number, cy: number, w: number, h: number): SkPath {
   const p = Skia.Path.Make()
-  p.moveTo(cx, cy + h * 0.7)
-  p.cubicTo(cx - w * 1.2, cy + h * 0.1, cx - w * 0.7, cy - h * 0.9, cx, cy - h * 0.55)
-  p.cubicTo(cx + w * 0.7, cy - h * 0.9, cx + w * 1.2, cy + h * 0.1, cx, cy + h * 0.7)
+  p.moveTo(cx, cy + h * HEART_REACH.bottomTip)
+  p.cubicTo(
+    cx - w * HEART_REACH.lobeX,
+    cy + h * 0.1,
+    cx - w * HEART_REACH.innerLobeX,
+    cy - h * HEART_REACH.lobeY,
+    cx,
+    cy - h * HEART_REACH.topNotch,
+  )
+  p.cubicTo(
+    cx + w * HEART_REACH.innerLobeX,
+    cy - h * HEART_REACH.lobeY,
+    cx + w * HEART_REACH.lobeX,
+    cy + h * 0.1,
+    cx,
+    cy + h * HEART_REACH.bottomTip,
+  )
   p.close()
   return p
 }
 
 /**
- * Builds a 5-point star path. `rOuter` controls the tip radius and
- * `rInner` the valley radius. The star is oriented point-up.
- * @internal
+ * @internal Star geometry. `INNER_RATIO` is the valley-to-tip ratio
+ * (5-point star with deep valleys). `OUTER_PADDING` over-extends the
+ * tips past the screen corner so the inner valleys still cover them.
  */
-function makeStarPath(cx: number, cy: number, rOuter: number, rInner: number) {
+const STAR_GEOMETRY = { points: 5, innerRatio: 0.4, outerPadding: 1.05 } as const
+
+function makeStarPath(cx: number, cy: number, rOuter: number, rInner: number): SkPath {
   const p = Skia.Path.Make()
-  const points = 5
-  const step = Math.PI / points
+  const step = Math.PI / STAR_GEOMETRY.points
   const start = -Math.PI / 2
-  for (let i = 0; i < points * 2; i++) {
+  for (let i = 0; i < STAR_GEOMETRY.points * 2; i++) {
     const r = i % 2 === 0 ? rOuter : rInner
     const a = start + i * step
     const x = cx + Math.cos(a) * r
@@ -64,22 +111,19 @@ function makeStarPath(cx: number, cy: number, rOuter: number, rInner: number) {
   return p
 }
 
-/**
- * Order keyframes so the same 0 → 1 progress drives the shape the right way:
- * normal = grow (tiny → full), inverted = shrink (full → tiny).
- * @internal
- */
+/** @internal Order keyframes so `progress` 0 → 1 grows the shape (or shrinks if inverted). */
 function orderKeyframes(inverted: boolean, tiny: SkPath, full: SkPath): SkPath[] {
   return inverted ? [full, tiny] : [tiny, full]
 }
 
+// ──────────────────────────── Runtime shaders ─────────────────────────────
+
 /**
- * Skia runtime shader: samples both the old and new snapshots at the same
- * block-cell center and crossfades between them. `blockSize` follows a
- * triangle curve (small → large → small) so both images pixelate at the
- * peak and resolve to clarity at the endpoints; `mix` slides linearly from
- * 0 (all old) to 1 (all new).
- * @internal
+ * @internal Pixelize shader. Samples both the old and new snapshots at
+ * a shared block-cell center and crossfades them. `blockSize` follows a
+ * triangle curve so both images are chunkiest at the midpoint and clear
+ * at the endpoints; `blend` slides linearly from 0 (all old) to 1 (all
+ * new).
  */
 const pixelizeShader = Skia.RuntimeEffect.Make(`
 uniform shader imgOld;
@@ -98,9 +142,9 @@ half4 main(float2 xy) {
 `)
 
 /**
- * Skia runtime shader: discards fragments whose deterministic noise value
- * falls below the current threshold, producing the dissolve effect.
- * @internal
+ * @internal Dissolve shader. Discards fragments whose deterministic
+ * noise value is below the current threshold, so the image disintegrates
+ * as `progress` rises.
  */
 const dissolveShader = Skia.RuntimeEffect.Make(`
 uniform shader img;
@@ -115,72 +159,337 @@ half4 main(float2 xy) {
 }
 `)
 
-/** @internal Frozen snapshot of the transition parameters, owned by the engine. */
-export interface OverlayParamsLike {
-  mode: TransitionType
-  origin: { x: number; y: number }
-  maxRadius: number
-  screenWidth: number
-  screenHeight: number
-  inverted: boolean
-  direction: 'left' | 'right' | 'up' | 'down'
-  axis: 'horizontal' | 'vertical'
-  blockSize: number
-  grainSize: number
-}
+// ─────────────────────────────── Top level ────────────────────────────────
 
 /** @internal */
 interface OverlayProps {
   /**
-   * Snapshot of the OLD theme. `null` when no transition is active —
-   * the Canvas stays mounted but renders nothing so that starting the
-   * next transition doesn't pay for a native-view layout pass.
+   * Snapshot of the OLD theme. `null` between transitions; the Canvas
+   * stays mounted but renders nothing so the next transition doesn't
+   * pay for a native-view layout pass.
    */
   image: SkImage | null
   /**
-   * Optional snapshot of the NEW theme, captured after the color swap.
+   * Optional snapshot of the NEW theme captured after the color swap.
    * Only provided for transitions that render both themes at once
    * (`slide`, `pixelize`).
    */
   imageNew: SkImage | null
   progress: SharedValue<number>
-  params: OverlayParamsLike
+  params: OverlayParams
 }
 
-/**
- * Renders the captured snapshot as a Skia overlay and animates it away
- * according to `params.mode`. Every mode is driven by the same 0 → 1
- * progress shared value so the engine can time them identically.
- * @internal
- */
+/** @internal Renders the active-mode subtree. Hooks are scoped per mode. */
 export function SkiaOverlay({ image, imageNew, progress, params }: OverlayProps) {
-  const {
-    mode,
-    origin: { x: originX, y: originY },
-    maxRadius,
-    screenWidth,
-    screenHeight,
-    inverted,
-    direction,
-    axis,
-    blockSize,
-    grainSize,
-  } = params
-  const opacity = useDerivedValue(() => 1 - progress.value)
-  const revealR = useDerivedValue(() => progress.value * maxRadius)
-  const invertedR = useDerivedValue(() => (1 - progress.value) * maxRadius)
+  return (
+    <Canvas style={CANVAS_STYLE}>
+      {image && (
+        <ActiveMode image={image} imageNew={imageNew} progress={progress} params={params} />
+      )}
+    </Canvas>
+  )
+}
 
-  // Heart size: concave bezier, asymmetric. Bounds the shape so that all
-  // 4 corners AND the top-center notch are covered at scale 1.0. See the
-  // block below for the reach factors.
+interface ActiveModeProps {
+  image: SkImage
+  imageNew: SkImage | null
+  progress: SharedValue<number>
+  params: OverlayParams
+}
+
+function ActiveMode({ image, imageNew, progress, params }: ActiveModeProps) {
+  switch (params.mode) {
+    case 'fade':
+      return <FadeMode image={image} progress={progress} params={params} />
+    case 'circularReveal':
+      return <CircularRevealMode image={image} progress={progress} params={params} />
+    case 'wipe':
+      return <WipeMode image={image} progress={progress} params={params} />
+    case 'slide':
+      return <SlideMode image={image} imageNew={imageNew} progress={progress} params={params} />
+    case 'split':
+      return <SplitMode image={image} progress={progress} params={params} />
+    case 'heart':
+      return <HeartMode image={image} progress={progress} params={params} />
+    case 'star':
+      return <StarMode image={image} progress={progress} params={params} />
+    case 'pixelize':
+      return <PixelizeMode image={image} imageNew={imageNew} progress={progress} params={params} />
+    case 'dissolve':
+      return <DissolveMode image={image} progress={progress} params={params} />
+  }
+}
+
+// ─────────────────────────── Per-mode components ──────────────────────────
+
+interface ModeProps {
+  image: SkImage
+  progress: SharedValue<number>
+  params: OverlayParams
+}
+
+interface DualModeProps extends ModeProps {
+  imageNew: SkImage | null
+}
+
+function FadeMode({ image, progress, params }: ModeProps) {
+  const { screenWidth, screenHeight } = params
+  const opacity = useDerivedValue(() => 1 - progress.value)
+  return (
+    <Group opacity={opacity}>
+      <SkiaImage image={image} x={0} y={0} width={screenWidth} height={screenHeight} fit="cover" />
+    </Group>
+  )
+}
+
+function CircularRevealMode({ image, progress, params }: ModeProps) {
+  const { origin, maxRadius, screenWidth, screenHeight, inverted } = params
+  const radius = useDerivedValue(() =>
+    inverted ? (1 - progress.value) * maxRadius : progress.value * maxRadius,
+  )
+  if (inverted) {
+    return (
+      <Circle cx={origin.x} cy={origin.y} r={radius}>
+        <ImageShader image={image} fit="cover" width={screenWidth} height={screenHeight} />
+      </Circle>
+    )
+  }
+  return (
+    <>
+      <SkiaImage image={image} x={0} y={0} width={screenWidth} height={screenHeight} fit="cover" />
+      <Circle cx={origin.x} cy={origin.y} r={radius} blendMode="clear" color="black" />
+    </>
+  )
+}
+
+function WipeMode({ image, progress, params }: ModeProps) {
+  const { screenWidth, screenHeight, direction } = params
+  const horizontal = direction === 'left' || direction === 'right'
+  const vertical = direction === 'up' || direction === 'down'
+
+  const x = useDerivedValue(() => (direction === 'left' ? screenWidth * (1 - progress.value) : 0))
+  const y = useDerivedValue(() => (direction === 'up' ? screenHeight * (1 - progress.value) : 0))
+  const width = useDerivedValue(() => (horizontal ? screenWidth * progress.value : screenWidth))
+  const height = useDerivedValue(() => (vertical ? screenHeight * progress.value : screenHeight))
+
+  return (
+    <>
+      <SkiaImage image={image} x={0} y={0} width={screenWidth} height={screenHeight} fit="cover" />
+      <Rect x={x} y={y} width={width} height={height} blendMode="clear" color="black" />
+    </>
+  )
+}
+
+function SlideMode({ image, imageNew, progress, params }: DualModeProps) {
+  const { screenWidth, screenHeight, direction } = params
+  const oldOffset = useSlideOffset(progress, direction, screenWidth, screenHeight, 'old')
+  const newOffset = useSlideOffset(progress, direction, screenWidth, screenHeight, 'new')
+
+  // Before the second snapshot lands we render only the old image so
+  // the inner tree (already swapped) stays hidden.
+  if (!imageNew) {
+    return (
+      <SkiaImage
+        image={image}
+        x={oldOffset.x}
+        y={oldOffset.y}
+        width={screenWidth}
+        height={screenHeight}
+        fit="cover"
+      />
+    )
+  }
+  return (
+    <>
+      <SkiaImage
+        image={image}
+        x={oldOffset.x}
+        y={oldOffset.y}
+        width={screenWidth}
+        height={screenHeight}
+        fit="cover"
+      />
+      <SkiaImage
+        image={imageNew}
+        x={newOffset.x}
+        y={newOffset.y}
+        width={screenWidth}
+        height={screenHeight}
+        fit="cover"
+      />
+    </>
+  )
+}
+
+function useSlideOffset(
+  progress: SharedValue<number>,
+  direction: WipeDirection,
+  screenWidth: number,
+  screenHeight: number,
+  which: 'old' | 'new',
+) {
+  const x = useDerivedValue(() => {
+    if (direction !== 'left' && direction !== 'right') return 0
+    const sign = direction === 'right' ? 1 : -1
+    return which === 'old'
+      ? sign * progress.value * screenWidth
+      : sign * -(1 - progress.value) * screenWidth
+  })
+  const y = useDerivedValue(() => {
+    if (direction !== 'up' && direction !== 'down') return 0
+    const sign = direction === 'down' ? 1 : -1
+    return which === 'old'
+      ? sign * progress.value * screenHeight
+      : sign * -(1 - progress.value) * screenHeight
+  })
+  return { x, y }
+}
+
+function SplitMode({ image, progress, params }: ModeProps) {
+  const { screenWidth, screenHeight, splitMode, inverted } = params
+  if (splitMode === 'top-bottom') {
+    return (
+      <SplitTopBottom
+        image={image}
+        progress={progress}
+        screenWidth={screenWidth}
+        screenHeight={screenHeight}
+        inverted={inverted}
+      />
+    )
+  }
+  return (
+    <SplitLeftRight
+      image={image}
+      progress={progress}
+      screenWidth={screenWidth}
+      screenHeight={screenHeight}
+      inverted={inverted}
+    />
+  )
+}
+
+interface SplitAxisProps {
+  image: SkImage
+  progress: SharedValue<number>
+  screenWidth: number
+  screenHeight: number
+  inverted: boolean
+}
+
+function SplitTopBottom({ image, progress, screenWidth, screenHeight, inverted }: SplitAxisProps) {
+  const halfH = screenHeight / 2
+  const stripH = useDerivedValue(() => halfH * progress.value)
+  const topY = useDerivedValue(() => (inverted ? 0 : halfH - halfH * progress.value))
+  const bottomY = useDerivedValue(() => (inverted ? screenHeight - halfH * progress.value : halfH))
+  return (
+    <>
+      <SkiaImage image={image} x={0} y={0} width={screenWidth} height={screenHeight} fit="cover" />
+      <Rect x={0} y={topY} width={screenWidth} height={stripH} blendMode="clear" color="black" />
+      <Rect x={0} y={bottomY} width={screenWidth} height={stripH} blendMode="clear" color="black" />
+    </>
+  )
+}
+
+function SplitLeftRight({ image, progress, screenWidth, screenHeight, inverted }: SplitAxisProps) {
+  const halfW = screenWidth / 2
+  const stripW = useDerivedValue(() => halfW * progress.value)
+  const leftX = useDerivedValue(() => (inverted ? 0 : halfW - halfW * progress.value))
+  const rightX = useDerivedValue(() => (inverted ? screenWidth - halfW * progress.value : halfW))
+  return (
+    <>
+      <SkiaImage image={image} x={0} y={0} width={screenWidth} height={screenHeight} fit="cover" />
+      <Rect x={leftX} y={0} width={stripW} height={screenHeight} blendMode="clear" color="black" />
+      <Rect x={rightX} y={0} width={stripW} height={screenHeight} blendMode="clear" color="black" />
+    </>
+  )
+}
+
+function HeartMode({ image, progress, params }: ModeProps) {
+  const { origin, screenWidth, screenHeight, inverted } = params
+  const path = useHeartPath(origin.x, origin.y, screenWidth, screenHeight, inverted, progress)
+  return (
+    <ShapeClip
+      image={image}
+      path={path}
+      inverted={inverted}
+      screenWidth={screenWidth}
+      screenHeight={screenHeight}
+    />
+  )
+}
+
+function StarMode({ image, progress, params }: ModeProps) {
+  const { origin, maxRadius, screenWidth, screenHeight, inverted } = params
+  const path = useStarPath(origin.x, origin.y, maxRadius, inverted, progress)
+  return (
+    <ShapeClip
+      image={image}
+      path={path}
+      inverted={inverted}
+      screenWidth={screenWidth}
+      screenHeight={screenHeight}
+    />
+  )
+}
+
+interface ShapeClipProps {
+  image: SkImage
+  path: SharedValue<SkPath>
+  inverted: boolean
+  screenWidth: number
+  screenHeight: number
+}
+
+function ShapeClip({ image, path, inverted, screenWidth, screenHeight }: ShapeClipProps) {
+  if (inverted) {
+    return (
+      <Group clip={path}>
+        <SkiaImage
+          image={image}
+          x={0}
+          y={0}
+          width={screenWidth}
+          height={screenHeight}
+          fit="cover"
+        />
+      </Group>
+    )
+  }
+  return (
+    <>
+      <SkiaImage image={image} x={0} y={0} width={screenWidth} height={screenHeight} fit="cover" />
+      <Group clip={path}>
+        <Rect
+          x={0}
+          y={0}
+          width={screenWidth}
+          height={screenHeight}
+          blendMode="clear"
+          color="black"
+        />
+      </Group>
+    </>
+  )
+}
+
+function useHeartPath(
+  originX: number,
+  originY: number,
+  screenWidth: number,
+  screenHeight: number,
+  inverted: boolean,
+  progress: SharedValue<number>,
+) {
+  // Smallest heart scale that covers all four corners AND the top
+  // notch from a low origin. Reach factors live next to the path
+  // builder so the math stays in sync with the curve.
   const heartSize = useMemo(() => {
     const cornerSize = (dx: number, dy: number) => {
-      const fy = dy < 0 ? 0.75 : 0.65
-      return Math.abs(dx) / 1.0 + Math.abs(dy) / fy
+      const fy = dy < 0 ? HEART_REACH.topCornerY : HEART_REACH.bottomCornerY
+      return Math.abs(dx) + Math.abs(dy) / fy
     }
-    // Top-center notch sits at y = cy - 0.55h. If origin is low on
-    // screen, corner bounds alone can leave a spike at y=0 near center.
-    const notch = originY / 0.55
+    const notch = originY / HEART_REACH.topNotch
     return (
       Math.max(
         cornerSize(-originX, -originY),
@@ -192,7 +501,7 @@ export function SkiaOverlay({ image, imageNew, progress, params }: OverlayProps)
     )
   }, [originX, originY, screenWidth, screenHeight])
 
-  const heartKeyframes = useMemo(
+  const keyframes = useMemo(
     () =>
       orderKeyframes(
         inverted,
@@ -201,34 +510,40 @@ export function SkiaOverlay({ image, imageNew, progress, params }: OverlayProps)
       ),
     [originX, originY, heartSize, inverted],
   )
-  const heartPath = usePathInterpolation(progress, [0, 1], heartKeyframes)
+  return usePathInterpolation(progress, KEYFRAME_INPUT, keyframes)
+}
 
-  // Star: 5-point, inner radius ≈ 0.4 × outer. The valleys at the inner
-  // radius are the limiting factor for corner coverage, so the outer tips
-  // need to reach well past the farthest corner.
-  const starInnerRatio = 0.4
-  const { starOuter, starInner } = useMemo(() => {
-    const outer = (maxRadius / starInnerRatio) * 1.05
-    return { starOuter: outer, starInner: outer * starInnerRatio }
+function useStarPath(
+  originX: number,
+  originY: number,
+  maxRadius: number,
+  inverted: boolean,
+  progress: SharedValue<number>,
+) {
+  const { outer, inner } = useMemo(() => {
+    const outerR = (maxRadius / STAR_GEOMETRY.innerRatio) * STAR_GEOMETRY.outerPadding
+    return { outer: outerR, inner: outerR * STAR_GEOMETRY.innerRatio }
   }, [maxRadius])
-  const starKeyframes = useMemo(
+  const keyframes = useMemo(
     () =>
       orderKeyframes(
         inverted,
-        makeStarPath(originX, originY, 1, 1 * starInnerRatio),
-        makeStarPath(originX, originY, starOuter, starInner),
+        makeStarPath(originX, originY, 1, STAR_GEOMETRY.innerRatio),
+        makeStarPath(originX, originY, outer, inner),
       ),
-    [originX, originY, starOuter, starInner, inverted],
+    [originX, originY, outer, inner, inverted],
   )
-  const starPath = usePathInterpolation(progress, [0, 1], starKeyframes)
+  return usePathInterpolation(progress, KEYFRAME_INPUT, keyframes)
+}
 
-  // Pixelize: block-size curve that ramps up linearly and decays with a
-  // cubic ease-out so the back half spends more time in the "nearly clear"
-  // range. Combined with the opacity fade below, the unmount at progress=1
-  // never shows a perceptual pop between the shader output and the real
-  // underlying view.
+function PixelizeMode({ image, imageNew, progress, params }: DualModeProps) {
+  const { screenWidth, screenHeight, blockSize } = params
   const screenSize = useMemo(() => [screenWidth, screenHeight], [screenWidth, screenHeight])
-  const pixelizeUniforms = useDerivedValue(() => {
+
+  // Triangle curve on `blockSize`: linear ramp up to the midpoint, cubic
+  // ease-out on the way back so the back half spends more time near
+  // "clear" than near "chunky" - masks the disappearance pop.
+  const uniforms = useDerivedValue(() => {
     const p = progress.value
     let tri: number
     if (p < 0.5) {
@@ -244,340 +559,71 @@ export function SkiaOverlay({ image, imageNew, progress, params }: OverlayProps)
       size: screenSize,
     }
   })
-  // Fade the overlay out during the last 15% of the animation so the
-  // disappearance is gradual, not a hard frame-boundary pop.
-  const pixelizeOpacity = useDerivedValue(() => {
+
+  // Linear opacity fade over the last 15% so the unmount at p=1 doesn't
+  // pop a frame between the shader output and the real underlying view.
+  const opacity = useDerivedValue(() => {
     if (progress.value <= 0.85) return 1
     return 1 - (progress.value - 0.85) / 0.15
   })
 
-  const dissolveUniforms = useDerivedValue(() => ({
-    threshold: progress.value,
-    grain: grainSize,
-  }))
-
-  // Slide: the old snapshot slides out in the opposite direction while the
-  // new snapshot slides in from `direction`. With `direction: 'right'`, the
-  // old slides from x=0 to x=-screenWidth and the new from x=+screenWidth
-  // back to x=0, producing a carousel push effect.
-  const slideOldX = useDerivedValue(() => {
-    if (direction === 'right') return -progress.value * screenWidth
-    if (direction === 'left') return progress.value * screenWidth
-    return 0
-  })
-  const slideOldY = useDerivedValue(() => {
-    if (direction === 'down') return -progress.value * screenHeight
-    if (direction === 'up') return progress.value * screenHeight
-    return 0
-  })
-  const slideNewX = useDerivedValue(() => {
-    if (direction === 'right') return (1 - progress.value) * screenWidth
-    if (direction === 'left') return -(1 - progress.value) * screenWidth
-    return 0
-  })
-  const slideNewY = useDerivedValue(() => {
-    if (direction === 'down') return (1 - progress.value) * screenHeight
-    if (direction === 'up') return -(1 - progress.value) * screenHeight
-    return 0
-  })
-
-  // Wipe: the erase rect grows from one edge in the direction of `direction`.
-  // `direction: 'right'` means the wipe edge sweeps rightward (reveal starts
-  // at the left edge), matching the visual arrow.
-  const wipeX = useDerivedValue(() =>
-    direction === 'left' ? screenWidth * (1 - progress.value) : 0,
-  )
-  const wipeY = useDerivedValue(() =>
-    direction === 'up' ? screenHeight * (1 - progress.value) : 0,
-  )
-  const wipeW = useDerivedValue(() =>
-    direction === 'left' || direction === 'right' ? screenWidth * progress.value : screenWidth,
-  )
-  const wipeH = useDerivedValue(() =>
-    direction === 'up' || direction === 'down' ? screenHeight * progress.value : screenHeight,
-  )
-
-  // Split: two cleared rects on either side of the split line. Their strip
-  // size (height for horizontal axis, width for vertical) grows 0 → half
-  // with progress — same formula for both modes. What changes with
-  // `inverted` is WHERE each strip starts, which we handle in the per-rect
-  // position derived values below.
-  const halfH = screenHeight / 2
-  const halfW = screenWidth / 2
-  const splitHStripH = useDerivedValue(() =>
-    axis === 'horizontal' ? halfH * progress.value : screenHeight,
-  )
-  const splitVStripW = useDerivedValue(() =>
-    axis === 'vertical' ? halfW * progress.value : screenWidth,
-  )
-
-  // Parting (default): strips grow outward from the center line.
-  //   Top rect: y = halfH - p*halfH, so its bottom edge stays at halfH.
-  //   Bottom rect: y = halfH, so its top edge stays at halfH.
-  // Shutters (inverted): strips grow inward from the edges.
-  //   Top rect: y = 0 (anchored at top edge).
-  //   Bottom rect: y = screenH - p*halfH (anchored at bottom edge).
-  const splitHTopY = useDerivedValue(() => {
-    if (axis !== 'horizontal') return 0
-    return inverted ? 0 : halfH - halfH * progress.value
-  })
-  const splitHBottomY = useDerivedValue(() => {
-    if (axis !== 'horizontal') return 0
-    return inverted ? screenHeight - halfH * progress.value : halfH
-  })
-  const splitVLeftX = useDerivedValue(() => {
-    if (axis !== 'vertical') return 0
-    return inverted ? 0 : halfW - halfW * progress.value
-  })
-  const splitVRightX = useDerivedValue(() => {
-    if (axis !== 'vertical') return 0
-    return inverted ? screenWidth - halfW * progress.value : halfW
-  })
-
-  const shapeClipPath = mode === 'heart' ? heartPath : starPath
-  const isShape = mode === 'heart' || mode === 'star'
-
-  // Gate EVERYTHING inside the Canvas on `image` so the Canvas native view
-  // stays permanently mounted (no layout pass when a transition starts) but
-  // renders nothing between transitions. This is what prevents the Android
-  // "new theme flash": if the Canvas mounts at the same commit as the theme
-  // swap, its first paint has no content while the inner tree (already
-  // mounted) paints the new colors — for one frame the user sees the new
-  // theme even though the overlay is supposedly on top.
+  // Until the second snapshot lands we hold the old image at full
+  // opacity - the inner tree has already been swapped, so it must stay
+  // hidden under the overlay.
+  if (!imageNew || !pixelizeShader) {
+    return (
+      <SkiaImage image={image} x={0} y={0} width={screenWidth} height={screenHeight} fit="cover" />
+    )
+  }
   return (
-    <Canvas style={ABSOLUTE_FILL} pointerEvents="none">
-      {image && (
-        <>
-          {mode === 'fade' && (
-            <Group opacity={opacity}>
-              <SkiaImage
-                image={image}
-                x={0}
-                y={0}
-                width={screenWidth}
-                height={screenHeight}
-                fit="cover"
-              />
-            </Group>
-          )}
+    <Group opacity={opacity}>
+      <Fill>
+        <Shader source={pixelizeShader} uniforms={uniforms}>
+          <ImageShader
+            image={image}
+            fit="cover"
+            width={screenWidth}
+            height={screenHeight}
+            tx="clamp"
+            ty="clamp"
+          />
+          <ImageShader
+            image={imageNew}
+            fit="cover"
+            width={screenWidth}
+            height={screenHeight}
+            tx="clamp"
+            ty="clamp"
+          />
+        </Shader>
+      </Fill>
+    </Group>
+  )
+}
 
-          {mode === 'circularReveal' && !inverted && (
-            <>
-              <SkiaImage
-                image={image}
-                x={0}
-                y={0}
-                width={screenWidth}
-                height={screenHeight}
-                fit="cover"
-              />
-              <Circle cx={originX} cy={originY} r={revealR} blendMode="clear" color="black" />
-            </>
-          )}
-
-          {mode === 'circularReveal' && inverted && (
-            <Circle cx={originX} cy={originY} r={invertedR}>
-              <ImageShader image={image} fit="cover" width={screenWidth} height={screenHeight} />
-            </Circle>
-          )}
-
-          {mode === 'wipe' && (
-            <>
-              <SkiaImage
-                image={image}
-                x={0}
-                y={0}
-                width={screenWidth}
-                height={screenHeight}
-                fit="cover"
-              />
-              <Rect
-                x={wipeX}
-                y={wipeY}
-                width={wipeW}
-                height={wipeH}
-                blendMode="clear"
-                color="black"
-              />
-            </>
-          )}
-
-          {isShape && !inverted && (
-            <>
-              <SkiaImage
-                image={image}
-                x={0}
-                y={0}
-                width={screenWidth}
-                height={screenHeight}
-                fit="cover"
-              />
-              <Group clip={shapeClipPath}>
-                <Rect
-                  x={0}
-                  y={0}
-                  width={screenWidth}
-                  height={screenHeight}
-                  blendMode="clear"
-                  color="black"
-                />
-              </Group>
-            </>
-          )}
-
-          {isShape && inverted && (
-            <Group clip={shapeClipPath}>
-              <SkiaImage
-                image={image}
-                x={0}
-                y={0}
-                width={screenWidth}
-                height={screenHeight}
-                fit="cover"
-              />
-            </Group>
-          )}
-
-          {mode === 'pixelize' && pixelizeShader && imageNew && (
-            <Group opacity={pixelizeOpacity}>
-              <Fill>
-                <Shader source={pixelizeShader} uniforms={pixelizeUniforms}>
-                  <ImageShader
-                    image={image}
-                    fit="cover"
-                    width={screenWidth}
-                    height={screenHeight}
-                    tx="clamp"
-                    ty="clamp"
-                  />
-                  <ImageShader
-                    image={imageNew}
-                    fit="cover"
-                    width={screenWidth}
-                    height={screenHeight}
-                    tx="clamp"
-                    ty="clamp"
-                  />
-                </Shader>
-              </Fill>
-            </Group>
-          )}
-
-          {/* Fallback: while the second (new-theme) snapshot is being
-          captured, pixelize has no shader inputs yet. Show the old
-          snapshot at full opacity so the inner tree — which has already
-          been swapped to the new theme — stays hidden under the overlay. */}
-          {mode === 'pixelize' && !imageNew && (
-            <SkiaImage
-              image={image}
-              x={0}
-              y={0}
-              width={screenWidth}
-              height={screenHeight}
-              fit="cover"
-            />
-          )}
-
-          {mode === 'dissolve' && dissolveShader && (
-            <Fill>
-              <Shader source={dissolveShader} uniforms={dissolveUniforms}>
-                <ImageShader
-                  image={image}
-                  fit="cover"
-                  width={screenWidth}
-                  height={screenHeight}
-                  tx="clamp"
-                  ty="clamp"
-                />
-              </Shader>
-            </Fill>
-          )}
-
-          {mode === 'slide' && imageNew && (
-            <>
-              <SkiaImage
-                image={image}
-                x={slideOldX}
-                y={slideOldY}
-                width={screenWidth}
-                height={screenHeight}
-                fit="cover"
-              />
-              <SkiaImage
-                image={imageNew}
-                x={slideNewX}
-                y={slideNewY}
-                width={screenWidth}
-                height={screenHeight}
-                fit="cover"
-              />
-            </>
-          )}
-
-          {mode === 'slide' && !imageNew && (
-            <SkiaImage
-              image={image}
-              x={slideOldX}
-              y={slideOldY}
-              width={screenWidth}
-              height={screenHeight}
-              fit="cover"
-            />
-          )}
-
-          {mode === 'split' && (
-            <>
-              <SkiaImage
-                image={image}
-                x={0}
-                y={0}
-                width={screenWidth}
-                height={screenHeight}
-                fit="cover"
-              />
-              {axis === 'horizontal' ? (
-                <>
-                  <Rect
-                    x={0}
-                    y={splitHTopY}
-                    width={screenWidth}
-                    height={splitHStripH}
-                    blendMode="clear"
-                    color="black"
-                  />
-                  <Rect
-                    x={0}
-                    y={splitHBottomY}
-                    width={screenWidth}
-                    height={splitHStripH}
-                    blendMode="clear"
-                    color="black"
-                  />
-                </>
-              ) : (
-                <>
-                  <Rect
-                    x={splitVLeftX}
-                    y={0}
-                    width={splitVStripW}
-                    height={screenHeight}
-                    blendMode="clear"
-                    color="black"
-                  />
-                  <Rect
-                    x={splitVRightX}
-                    y={0}
-                    width={splitVStripW}
-                    height={screenHeight}
-                    blendMode="clear"
-                    color="black"
-                  />
-                </>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </Canvas>
+function DissolveMode({ image, progress, params }: ModeProps) {
+  const { screenWidth, screenHeight, noiseSize } = params
+  const uniforms = useDerivedValue(() => ({
+    threshold: progress.value,
+    grain: noiseSize,
+  }))
+  if (!dissolveShader) {
+    return (
+      <SkiaImage image={image} x={0} y={0} width={screenWidth} height={screenHeight} fit="cover" />
+    )
+  }
+  return (
+    <Fill>
+      <Shader source={dissolveShader} uniforms={uniforms}>
+        <ImageShader
+          image={image}
+          fit="cover"
+          width={screenWidth}
+          height={screenHeight}
+          tx="clamp"
+          ty="clamp"
+        />
+      </Shader>
+    </Fill>
   )
 }

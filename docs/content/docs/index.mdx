@@ -1,44 +1,72 @@
 ---
 title: Overview
-description: Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS, powered by Reanimated.
+description: Smooth, animated theme transitions for React Native. Expo Go compatible, powered by Skia and Reanimated.
 ---
 
-Theme transitions in React Native have always needed custom native modules. That means no Expo Go, no OTA updates, and extra maintenance for each platform.
+`react-native-theme-transition` brings native-feeling theme
+switching to React Native without any custom native code. It
+captures the current screen into a Skia canvas, swaps your theme
+underneath, and animates the captured frame away with a shader, a
+shape clip, a slide, or a fade. Everything runs on JS, Skia, and
+Reanimated, so the library works in Expo Go with no prebuild.
 
-This library takes a different approach: snapshot the current screen into a Skia Canvas, swap the theme underneath, and animate the captured snapshot away with a shader, a shape clip, or a simple cross-fade. The result is a set of smooth transitions that work everywhere, with no native code and no prebuild — every peer dependency ships with Expo Go.
+## Highlights
 
-## Features
+- **Nine transition kinds.** `fade`, `circularReveal`, `heart`,
+  `star`, `wipe`, `slide`, `split`, `pixelize`, `dissolve`. Picked
+  per call via a typed discriminated union. Reveal-style transitions
+  support an `inverted` variant.
+- **Expo Go compatible.** No native modules, no prebuilds. Skia and
+  Reanimated both ship with modern Expo SDKs.
+- **Typed theme management.** One provider, one `useTheme` hook,
+  full generic inference for theme names and token keys.
+- **First-class system mode.** `useTheme()` exposes a `preference`
+  field that can be `'system'` (for pickers and persistence), while
+  `theme` always describes the concrete painted theme (for
+  rendering).
+- **Transition guard.** Concurrent `setTheme` calls return
+  `'ignored'`, so you can wire buttons directly without writing your
+  own queue.
+- **React Compiler ready.** All hooks follow the
+  [Rules of React](https://react.dev/reference/rules).
+- **Tiny footprint.** Around 13 kB of runtime.
 
-- **9 transition styles.** Fade, circular reveal, heart, star, wipe, slide, split, pixelize, dissolve — all configurable per call via a typed discriminated union. Every reveal-style transition also supports an inverted direction.
-- **Expo Go compatible.** No native code, no prebuilds. Powered by Skia and Reanimated, both ship with modern Expo SDKs.
-- **Typed theme management.** Provider, single `useTheme` hook with deep generic inference for theme names and token keys.
-- **System theme sync.** Follows OS appearance automatically with zero-flash startup and runtime switching. Respects Reduce Motion.
-- **Transition-safe selection.** `select()` defers state changes by one frame so picker highlights appear correctly in the captured screenshot.
-- **Transition guard.** Blocks concurrent transitions, exposes `isTransitioning`, never queues.
-- **React Compiler ready.** All hooks follow the [Rules of React](https://react.dev/reference/rules).
-- **Tiny footprint.** ~13 kB runtime, no vendored dependencies.
-
-## Comparison
+## How It Compares
 
 | Feature | react-native-theme-transition | react-native-theme-switch-animation | Uniwind Pro | Unistyles 3 |
 |---|:---:|:---:|:---:|:---:|
-| Animated transitions | 9 styles (fade, reveal, wipe, split, shapes, shaders) | Fade / circular reveal | Native snapshot | None (instant) |
+| Animated transitions | 9 styles | Fade or circular reveal | Native snapshot | None (instant) |
 | Expo Go support | Yes | No (prebuild) | No (prebuild) | No (prebuild) |
-| Execution | Skia + Reanimated | Native modules | C++ engine | C++ (ShadowTree) |
-| Theme state management | Provider + typed hooks | Bring your own | Built-in | Built-in |
+| Execution | Skia and Reanimated | Native modules | C++ engine | C++ (ShadowTree) |
+| Theme state management | Provider and typed hooks | Bring your own | Built-in | Built-in |
 | TypeScript generics | Deep inference | Basic | Auto-generated | Manual override |
 | System theme listener | Built-in | Not included | Built-in | Adaptive themes |
-| Price | Free (MIT) | Free (MIT) | $99/seat/year | Free (MIT) |
+| Price | Free (MIT) | Free (MIT) | $99 / seat / year | Free (MIT) |
 
-## Trade-offs
+## Trade-Offs
 
-- **No interaction during transitions.** Touches, scrolls, and additional `setTheme` calls are blocked while the animation is running. Use `isTransitioning` to disable buttons.
-- **Static overlay.** The transition uses a captured snapshot, so dynamic content (videos, animations, live counters) will appear frozen while the overlay is visible.
+- **No interaction during transitions.** Touches, scrolls, and
+  additional `setTheme` calls are blocked while the animation is
+  running. Use `isTransitioning` to disable buttons visually.
+- **Static overlay.** The transition renders a captured snapshot,
+  so dynamic content (videos, live counters) appears frozen for the
+  duration of the animation.
+- **No built-in Reduce Motion handling.** The library is
+  policy-free on accessibility. If you want to honor the OS Reduce
+  Motion setting, call `setTheme(name, { animated: false })` from
+  your own wrapper.
 
 ## Requirements
 
-- React >= 18.0.0
-- React Native >= 0.76
-- react-native-reanimated >= 4.0.0
-- @shopify/react-native-skia >= 2.4.0
-- react-native-worklets >= 0.5.0
+- React `>= 19.0.0`
+- React Native `>= 0.78.0`
+- `react-native-reanimated` `>= 4.0.0`
+- `@shopify/react-native-skia` `>= 2.0.0`
+- `react-native-worklets` `>= 0.5.0`
+
+## See Also
+
+- [Quick start](/docs/quick-start). Three-step setup.
+- [createThemeTransition](/docs/api/create-theme-transition). The factory.
+- [useTheme](/docs/api/use-theme). The hook.
+- [How transitions work](/docs/guides/how-it-works). Capture, swap, animate.

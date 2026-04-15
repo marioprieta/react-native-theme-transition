@@ -1,99 +1,124 @@
 ---
 title: How It Works
-description: The screenshot-overlay technique behind smooth theme transitions.
+description: The snapshot-overlay technique behind smooth, native-feeling theme transitions in pure JavaScript.
 ---
 
-The library captures a full-screen snapshot of the current UI via Skia,
-displays it as an opaque overlay, switches all color tokens underneath,
-then animates the overlay away on the native UI thread via Reanimated.
-The snapshot is taken while the **old** colors are still visible, so the
-new theme is fully committed under the overlay before the animation starts.
+Every transition is the same simple trick. Take a picture of what's
+on screen, put it on top, change the colors underneath, then
+animate the picture away. The picture is a Skia `SkImage`, the
+animation runs on the UI thread via Reanimated, and the whole
+pipeline is policy-free. There are no Reduce Motion checks, no
+`setTimeout` fallbacks, no magic defaults beyond the per-kind
+durations.
 
-## Sequence diagram
+## The Two-Commit Flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Hook as setTheme()
-    participant Skia as Skia capture
-    participant React as React Tree
+    participant Skia as Skia Canvas
+    participant Tree as React Tree
     participant UI as UI Thread
 
     User->>Hook: setTheme('dark')
-    Hook->>UI: Block touches (shared value → pointerEvents)
-    Hook->>Skia: Wait 2 frames, capture screen
+    Hook->>UI: block touches (shared value)
+    Note over Hook: settle 1 frame (paint any pending state)
+    Hook->>Skia: snapshot root view
     Skia-->>Hook: SkImage
-    Hook->>UI: Mount opaque overlay (captured image)
-    Note over Hook,UI: 1 frame — compositor paints overlay
-    Hook->>React: Swap color tokens
-    Note over Hook,UI: 1 frame — React commits new theme
-    Hook->>UI: Animate overlay (fade / reveal / wipe / ...)
-    UI-->>Hook: Animation complete
-    Hook->>UI: Unblock touches, remove overlay
-    UI-->>User: Transition complete
+    Hook->>UI: mount overlay (opaque)
+    Note over Hook,UI: 2 frames for the Skia Canvas to paint
+    Hook->>Tree: swap color tokens
+    Note over Hook,Tree: 1 frame (reveal/shape/capturesNew only)
+    Hook->>UI: animate overlay (fade / reveal / wipe / shader / …)
+    Note over UI: setTimeout(duration) drives finish on JS
+    Hook->>UI: unmount overlay, unblock touches
 ```
 
-## Step by step
+## Step by Step
 
-1. `setTheme('dark')` (or `select('dark')`) is called.
-2. Touches are blocked instantly via a Reanimated shared value — no React
-   re-render needed.
-3. The library waits 2 frames for the JS → Shadow Tree → Native UI pipeline
-   to fully paint any pending state changes (this is why `select()` defers
-   by one frame — so the pressed highlight ends up in the screenshot).
-4. A full-screen snapshot is captured via `@shopify/react-native-skia`.
-5. The snapshot is mounted as an opaque overlay on top of everything.
-6. One frame for the compositor to paint the overlay on screen.
-7. Color tokens are swapped underneath — the provider updates its React
-   context, all children re-render with the new colors while the overlay
-   is still opaque.
-8. One frame for React to commit the new theme under the still-opaque overlay.
-9. The overlay animates according to the selected transition style — a fade,
-   an expanding circle, a wipe, a shape clip, a pixelize/dissolve shader, etc.
-   All styles run on the UI thread via Reanimated.
-10. Touches are unblocked and the overlay is removed when the animation ends.
+1. `setTheme('dark')` runs. Touches are blocked immediately through
+   a Reanimated shared value, with no re-render and no JS round-trip.
+2. The engine waits **one frame** (`SETTLE.beforeCapture`). This
+   gives any state updated in the same tick (a pressed highlight,
+   an optimistic picker selection) time to paint before the
+   snapshot.
+3. The root view is snapshotted into a Skia `SkImage` via Skia's
+   `makeImageFromView`.
+4. The snapshot is mounted as an opaque overlay covering the entire
+   provider.
+5. **Two frames** for the Skia Canvas to actually paint the overlay
+   on the GPU (`SETTLE.skiaPaint`). Without this wait, Android can
+   flash the new theme through during the inner-tree color swap.
+6. Color tokens swap underneath. The provider updates its context,
+   every consumer re-renders with the new theme. Invisible, because
+   the overlay is still fully opaque on top.
+7. **One frame** for the tree to commit and repaint
+   (`SETTLE.treeRepaint`). Only for reveal-style and shape
+   transitions that expose the inner tree through a growing hole,
+   plus slide and pixelize that capture a second snapshot. Fade,
+   wipe, split, and dissolve skip this wait because the overlay
+   covers everything until the animation resolves.
+8. The overlay animates: fade, expanding shape, wipe, slide, split,
+   pixelize, or dissolve. Every variant runs entirely on the UI
+   thread via Reanimated worklets.
+9. A `setTimeout` matched to the animation duration fires the
+   finish handler on the JS thread, which unmounts the overlay and
+   unblocks touches.
 
-> A **worklet** is a small JS function that Reanimated runs directly on the
-> UI thread — the library uses one to react to animation completion without
-> a JS-thread round trip.
+## The Settle Pattern
 
-## The frame pipeline
+Three short waits, each doing exactly one job.
 
-React Native renders in a pipeline:
+| Wait | Frames | Why |
+|---|---|---|
+| `SETTLE.beforeCapture` | 1 | Let any state updated in the same tick paint before the snapshot. |
+| `SETTLE.skiaPaint` | 2 | Let the Skia Canvas actually draw on GPU before the inner-tree color swap. |
+| `SETTLE.treeRepaint` | 1 | Let Android repaint deep ScrollView children before a reveal or shape animation exposes them. |
 
+The values are tuned empirically and confirmed on both iOS and
+Android. `SETTLE.treeRepaint` is gated to the kinds of transitions
+that actually need it, so fade and wipe save one frame of latency.
+
+## Why Snapshots?
+
+Most theme-transition libraries reach for a custom native module to
+manipulate the view hierarchy directly. The snapshot approach needs
+zero native code. Skia and Reanimated do everything, both ship in
+modern Expo SDKs, and the result works in Expo Go.
+
+The trade-off is that the overlay is a still image. Any live
+content behind it (a video, a Lottie animation, a camera preview, a
+ticking counter) is frozen for the transition's duration. That's
+typically a few hundred milliseconds; nobody notices in practice.
+
+## Why No Reduce Motion?
+
+The library is policy-free on accessibility. There is no built-in
+Reduce Motion check, for two reasons.
+
+1. Theme transitions are brief color changes, not spatial motion.
+   They don't trigger vestibular discomfort the way a slide-in
+   modal does.
+2. Apps that *do* want to respect the OS setting may want different
+   policies: disable entirely, fall back to fade, halve the
+   duration. Hard-coding one of those would be wrong for everyone
+   else.
+
+If you want to honor the OS setting, read it yourself and pass
+`animated: false`.
+
+```tsx
+import { AccessibilityInfo } from 'react-native'
+
+const reduced = await AccessibilityInfo.isReduceMotionEnabled()
+setTheme('dark', reduced ? { animated: false } : undefined)
 ```
-JS Thread → Shadow Tree → Native UI Thread
-```
 
-Each stage takes ~1 frame (~16ms at 60Hz, ~8ms at 120Hz). The library uses
-`waitFrames` to ensure each stage completes before proceeding:
+That's the whole API for it. Decide your own policy.
 
-- **2 frames before capture**: ensures pending state changes are fully painted
-- **1 frame after overlay mount**: ensures the compositor has painted the overlay
-- **1 frame after color swap**: ensures React has committed the new theme
+## See Also
 
-The animation duration is independent of frame rate and runs on the UI thread,
-matching the device's native refresh rate (60–120 FPS).
-
-## Why screenshots?
-
-Other approaches to theme transitions require custom iOS/Android code to
-manipulate the view hierarchy directly. The snapshot approach works entirely
-in JS + Reanimated + Skia, making it compatible with Expo Go and any React
-Native setup.
-
-The trade-off is that the overlay is a still image regardless of transition
-type — `fade`, `circularReveal`, `wipe`, `pixelize`, and every other style
-animate this same bitmap. Any dynamic content behind it (videos, Lottie,
-camera preview, live counters) will appear frozen for the transition's
-`duration`.
-
-## Reduced motion
-
-When the OS has Reduce Motion enabled and `reduceMotion: true` is set in
-config (the default), the library skips the snapshot / overlay step entirely
-and switches colors instantly. None of the transition callbacks fire in that
-path — only `onThemeChange`.
-
-Read the current value in your own UI with the exported `useReducedMotion()`
-hook if you want to adjust unrelated animations to match.
+- [setTheme reference](/docs/api/use-theme#settheme). Every option, every variant.
+- [Callbacks](/docs/guides/callbacks). When each callback fires and why.
+- [Troubleshooting](/docs/guides/troubleshooting). Common gotchas.

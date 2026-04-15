@@ -1,11 +1,14 @@
 ---
 title: System Theme
-description: Follow OS appearance automatically with zero-flash startup.
+description: Follow OS appearance with zero-flash startup, then animate when the user changes the system scheme.
 ---
 
-## Basic setup
+The library reads the OS color scheme synchronously on mount and
+subscribes to changes. Pass `initialTheme="system"` and the very
+first frame is already on the right theme. No flash, no async
+hydration, no race.
 
-Pass `initialTheme="system"` to follow OS appearance from the first frame. The OS scheme is read synchronously before the first render, preventing a flash of the wrong theme:
+## Basic Setup
 
 ```tsx
 <ThemeTransitionProvider initialTheme="system">
@@ -13,65 +16,93 @@ Pass `initialTheme="system"` to follow OS appearance from the first frame. The O
 </ThemeTransitionProvider>
 ```
 
-With custom theme names, add `systemThemeMap`:
+With custom theme names, add `systemThemeMap` so the library knows
+which of your themes corresponds to the OS `light` / `dark`:
 
 ```ts
 export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
   themes: { sunrise, midnight },
   systemThemeMap: { light: 'sunrise', dark: 'midnight' },
-});
+})
 ```
 
-## Entering and exiting system mode
+## Detecting System Mode
+
+`theme.name` is always the concrete resolved theme. It is never
+`'system'`. To detect whether the user chose to follow the OS, read
+`preference`:
 
 ```tsx
-setTheme('system');  // enter — subscribes to OS changes
-setTheme('dark');    // exit — manual mode, ignores OS
+const { preference } = useTheme()
+const isFollowingSystem = preference === 'system'
 ```
 
-## What happens under the hood
-
-- **Foreground**: OS appearance change triggers an animated transition
-- **Background**: OS appearance change triggers an instant switch (no visible animation)
-- **Returning to foreground**: re-reads OS scheme with instant switch
-
-## StatusBar sync
-
-The library doesn't manage StatusBar. Sync it manually:
-
-<Callout type="info">
-  These examples use `name === 'dark'` for simplicity. If your app has custom
-  dark-ish themes, replace that check with a set membership test.
-</Callout>
+`theme` describes what's painted; `preference` describes what the
+user picked. See [useTheme](/docs/api/use-theme#theme-vs-preference)
+for the full decision table.
 
 ```tsx
-import { StatusBar } from 'expo-status-bar';
-import { useTheme } from '@/lib/theme';
+const { theme, preference } = useTheme()
+
+// For styling: read from theme.colors
+<View style={{ backgroundColor: theme.colors.background }} />
+
+// For picker highlights: compare preference so 'system' can win
+const isSystemSelected = preference === 'system'
+```
+
+## Entering and Exiting System Mode
+
+```tsx
+setTheme('system')  // enter: subscribes to OS appearance changes
+setTheme('dark')    // exit: manual mode, OS changes are ignored
+```
+
+## What Happens Under the Hood
+
+- **Foreground.** An OS appearance change runs a full animated transition.
+- **Background.** An OS appearance change is applied as an instant switch; nothing to animate.
+- **Returning to foreground.** The library re-reads the OS scheme and corrects instantly if it changed while the app was backgrounded.
+
+## StatusBar Sync
+
+The library doesn't touch the status bar. Sync it yourself using
+`theme.scheme`. It's always `'light'` or `'dark'`, regardless of
+how many themes you define or whether the user is in system mode.
+
+```tsx
+import { StatusBar } from 'expo-status-bar'
+import { useTheme } from '@/lib/theme'
 
 function StatusBarSync() {
-  const { name } = useTheme();
-  return <StatusBar style={name === 'dark' ? 'light' : 'dark'} />;
+  const { theme } = useTheme()
+  return <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
 }
 ```
 
-### Native UI elements (alerts, date pickers)
+## Native UI Elements
 
-The library automatically calls `Appearance.setColorScheme` to keep native UI
-elements (alerts, date pickers, keyboards) in sync with the active theme.
-No manual setup is required.
-
-In **manual mode**, the library sets `'dark'` or `'light'` based on the `darkThemes`
-config. In **system mode**, it sets `'unspecified'` so the OS drives native appearance.
+The library calls `Appearance.setColorScheme` internally so alerts,
+date pickers, and keyboards match the active theme. In system mode
+it uses `'unspecified'` so the OS drives them. With multiple dark
+themes, tell the library which ones count as dark:
 
 ```ts
 createThemeTransition({
   themes: { light, dark, ocean },
-  darkThemes: ['dark', 'ocean'], // these get Appearance.setColorScheme('dark')
-});
+  darkThemes: ['dark', 'ocean'],
+})
 ```
 
 <Callout type="warn">
-  Do **not** call `Appearance.setColorScheme` yourself — the library manages it
-  internally. Calling it manually can corrupt `getColorScheme()` on Android and
-  break system-following mode.
+  Do **not** call `Appearance.setColorScheme` yourself. The library
+  tracks system mode through that call; manual writes desync it and
+  break the next `setTheme('system')` on Android.
 </Callout>
+
+## See Also
+
+- [Theme Picker](/docs/examples/theme-picker). Picker that includes a `'system'` row.
+- [Persisted Preference](/docs/recipes/persistence). Restore the user's pick on launch.
+- [createThemeTransition](/docs/api/create-theme-transition#systemthememap). The `systemThemeMap` field.
+- [Callbacks](/docs/guides/callbacks). System-driven changes go through `onThemeChange`.

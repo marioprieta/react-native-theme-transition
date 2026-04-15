@@ -1,89 +1,130 @@
 ---
-title: Haptic Feedback & Analytics
-description: Add haptic feedback and analytics tracking to theme transitions.
+title: Haptics & Analytics
+description: Add haptic feedback and analytics tracking to theme transitions via the lifecycle callbacks.
 ---
 
-## Haptic feedback
+The library exposes three lifecycle callbacks (`onTransitionStart`,
+`onTransitionEnd`, and `onThemeChange`), which are exactly the right
+hooks for haptics and analytics. Configure them once at the
+`createThemeTransition` call site and every transition picks them up,
+or pass per-call versions through `setTheme`'s options for one-off
+behavior.
 
-### On every animated transition (config-level)
+## Haptic Feedback
 
-```ts
-import * as Haptics from 'expo-haptics';
+### On Every Animated Transition
+
+```ts title="src/lib/theme.ts"
+import * as Haptics from 'expo-haptics'
+import { createThemeTransition } from 'react-native-theme-transition'
 
 export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
   themes: { light, dark },
   onTransitionStart: () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
   },
-});
+})
 ```
 
-### On a specific button only (per-call)
+Fires for every animated transition, including system-driven ones.
+Skipped for instant switches (`animated: false`); there's nothing to
+feel.
+
+### On a Specific Button Only
+
+Pass `onTransitionStart` per call instead of at the config level:
 
 ```tsx
+import * as Haptics from 'expo-haptics'
+
 function ThemeToggle() {
-  const { name, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme()
 
   return (
-    <Pressable onPress={() => {
-      setTheme(name === 'light' ? 'dark' : 'light', {
-        onTransitionStart: () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        },
-      });
-    }}>
+    <Pressable
+      onPress={() => {
+        setTheme(theme.name === 'light' ? 'dark' : 'light', {
+          onTransitionStart: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+          },
+        })
+      }}
+    >
       <Text>Toggle</Text>
     </Pressable>
-  );
+  )
 }
 ```
+
+The per-call callback fires **after** the config-level one. See
+[Callbacks](/docs/guides/callbacks) for the full ordering.
 
 ## Analytics
 
-Use `onThemeChange` to track every theme change (animated, instant, system-driven):
+`onThemeChange` is the only callback guaranteed to fire on every code
+path: animated, instant, system-driven, and capture-failure
+fallbacks. Use it as the single source of truth for tracking.
 
-```ts
+```ts title="src/lib/theme.ts"
 export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
   themes: { light, dark },
   onThemeChange: (name) => {
-    analytics.track('theme_changed', { theme: name });
+    analytics.track('theme_changed', { theme: name })
   },
-});
+})
 ```
 
 <Callout type="info">
-  `onThemeChange` is the only callback guaranteed to fire for every theme change.
-  `onTransitionStart` and `onTransitionEnd` only fire for animated transitions.
+  `onTransitionStart` and `onTransitionEnd` fire only for animated
+  transitions and can leave gaps on capture failures. Use them for
+  feedback effects, not for "the theme is now X" tracking.
 </Callout>
 
-## Disable UI during transitions
-
-### Disable a button
+## Disable UI During Transitions
 
 ```tsx
-<Pressable
-  onPress={() => setTheme('dark')}
-  disabled={isTransitioning}
->
-  <Text>Switch theme</Text>
-</Pressable>
+function ThemeButton() {
+  const { setTheme, isTransitioning } = useTheme()
+
+  return (
+    <Pressable disabled={isTransitioning} onPress={() => setTheme('dark')}>
+      <Text>Switch theme</Text>
+    </Pressable>
+  )
+}
 ```
 
 <Callout type="warn">
-  Do not change styles based on `isTransitioning` (e.g., opacity). The screenshot captures
-  the current visual state — style changes will bleed into the cross-fade.
+  Do not change visual styles based on `isTransitioning`, e.g.
+  `opacity: isTransitioning ? 0.5 : 1`. The snapshot captures the
+  current visual state, and style changes will bleed into the
+  cross-fade. Use `disabled` (which doesn't change styling) instead.
 </Callout>
 
-### Defer expensive renders
+### Defer Expensive Renders
+
+If a component does heavy work on every render and you don't need it
+visible during the transition, swap it for a placeholder while
+`isTransitioning` is `true`:
 
 ```tsx
 function HeavyChart() {
-  const { isTransitioning, colors } = useTheme();
+  const { theme, isTransitioning } = useTheme()
 
   if (isTransitioning) {
-    return <View style={{ height: 200, backgroundColor: colors.card }} />;
+    return <View style={{ height: 200, backgroundColor: theme.colors.card }} />
   }
 
-  return <ExpensiveChartComponent colors={colors} />;
+  return <ExpensiveChartComponent colors={theme.colors} />
 }
 ```
+
+The placeholder uses the new theme's color, so it blends with the
+overlay's destination state. The expensive chart only re-renders once,
+after the animation finishes.
+
+## See Also
+
+- [Callbacks](/docs/guides/callbacks). Full lifecycle ordering and edge cases.
+- [createThemeTransition](/docs/api/create-theme-transition#arguments). Config-level callback fields.
+- [SetThemeOptions](/docs/types#setthemeoptions). Per-call callback fields.

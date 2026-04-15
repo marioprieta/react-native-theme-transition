@@ -9,14 +9,17 @@
  */
 
 /**
- * High-level grouping of transitions by how they render, used for shared
- * defaults (e.g. all `'shape'` transitions share the 800ms default).
+ * @internal High-level grouping of transitions by how they render, used
+ * for shared defaults (e.g. all `'shape'` transitions share the 800ms
+ * default). Not part of the public API; consumers read `kind` directly
+ * from `TRANSITION_META[transition]` and let TypeScript infer the
+ * literal union.
  *
- * - `'fade'` — the overlay's opacity animates to zero.
- * - `'reveal'` — a growing (or shrinking) circular shape clipped out of the overlay.
- * - `'shape'` — a reveal that uses a custom path (`heart`, `star`).
- * - `'shader'` — a runtime Skia shader effect (`pixelize`, `dissolve`).
- * - `'strip'` — rectangular regions sliding or clearing across the screen
+ * - `'fade'`: the overlay's opacity animates to zero.
+ * - `'reveal'`: a growing (or shrinking) circular shape clipped out of the overlay.
+ * - `'shape'`: a reveal that uses a custom path (`heart`, `star`).
+ * - `'shader'`: a runtime Skia shader effect (`pixelize`, `dissolve`).
+ * - `'strip'`: rectangular regions sliding or clearing across the screen
  *   (`wipe` edge, `slide` carousel push, `split` parting/shutters).
  */
 export type TransitionKind = 'fade' | 'reveal' | 'shape' | 'shader' | 'strip'
@@ -39,16 +42,16 @@ interface TransitionMeta {
  * Per-transition metadata table.
  *
  * Every supported transition has an entry declaring:
- * - `kind` — the rendering family (`'fade'`, `'reveal'`, `'shape'`, `'shader'`, `'strip'`).
- * - `needsOrigin` — whether the engine should resolve an `origin` before
+ * - `kind`: the rendering family (`'fade'`, `'reveal'`, `'shape'`, `'shader'`, `'strip'`).
+ * - `needsOrigin`: whether the engine should resolve an `origin` before
  *   running the transition (reveals and shape transitions do).
- * - `invertible` — whether the transition accepts the `inverted` option.
+ * - `invertible`: whether the transition accepts the `inverted` option.
  *   Flips reveal/shape transitions (shape shrinks instead of grows) and
  *   toggles `split` between parting and shutters.
- * - `capturesNew` — whether the engine needs a second snapshot of the new
+ * - `capturesNew`: whether the engine needs a second snapshot of the new
  *   theme captured after the color swap, so the transition can render both
  *   old and new simultaneously (`slide`, `pixelize`).
- * - `defaultDuration` — milliseconds used when no per-call or config-level
+ * - `defaultDuration`: milliseconds used when no per-call or config-level
  *   `duration` is set.
  *
  * Use this table to drive UIs that adapt to the selected transition, for
@@ -137,7 +140,7 @@ export const TRANSITION_META = {
 
 /**
  * Union of every supported transition name. Derived automatically from the
- * {@link TRANSITION_META} table — adding an entry there also adds it here.
+ * {@link TRANSITION_META} table. Adding an entry there also adds it here.
  */
 export type TransitionType = keyof typeof TRANSITION_META
 
@@ -161,5 +164,5 @@ export const TRANSITION_TYPES = Object.keys(TRANSITION_META) as TransitionType[]
 /** @internal Direction for `wipe` and `slide` transitions. */
 export type WipeDirection = 'left' | 'right' | 'up' | 'down'
 
-/** @internal Axis for `split` transitions. */
-export type SplitAxis = 'horizontal' | 'vertical'
+/** @internal How the screen is divided by the `split` transition. */
+export type SplitMode = 'top-bottom' | 'left-right'

@@ -78,8 +78,8 @@
   "homepage": "https://react-native-theme-transition.vercel.app",
   "author": "Mario Prieta",
   "peerDependencies": {
-    "react": ">=18.0.0",
-    "react-native": ">=0.76.0",
+    "react": ">=19.0.0",
+    "react-native": ">=0.78.0",
     "react-native-reanimated": ">=4.0.0",
     "@shopify/react-native-skia": ">=2.0.0",
     "react-native-worklets": ">=0.5.0"

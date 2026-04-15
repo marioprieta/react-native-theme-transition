@@ -28,30 +28,14 @@ describe('createThemeTransition — config validation', () => {
     ).toThrow('different token keys')
   })
 
-  it('throws on negative duration', () => {
-    expect(() => createThemeTransition({ themes: { light, dark }, duration: -1 })).toThrow(
-      '`duration` must be a finite non-negative number',
-    )
-  })
-
-  it('throws on NaN duration', () => {
-    expect(() => createThemeTransition({ themes: { light, dark }, duration: NaN })).toThrow(
-      '`duration` must be a finite non-negative number',
-    )
-  })
-
-  it('throws on Infinity duration', () => {
-    expect(() => createThemeTransition({ themes: { light, dark }, duration: Infinity })).toThrow(
-      '`duration` must be a finite non-negative number',
-    )
-  })
-
-  it('accepts zero duration', () => {
-    expect(() => createThemeTransition({ themes: { light, dark }, duration: 0 })).not.toThrow()
-  })
-
-  it('accepts positive duration', () => {
-    expect(() => createThemeTransition({ themes: { light, dark }, duration: 500 })).not.toThrow()
+  it('throws on darkThemes containing an unknown theme', () => {
+    expect(() =>
+      createThemeTransition({
+        themes: { light, dark },
+        // @ts-expect-error testing runtime validation
+        darkThemes: ['dark', 'midnight'],
+      }),
+    ).toThrow('`darkThemes` refers to "midnight" which does not exist in themes')
   })
 
   it('throws on incomplete systemThemeMap (missing dark)', () => {

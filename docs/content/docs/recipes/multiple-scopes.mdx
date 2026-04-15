@@ -1,0 +1,142 @@
+---
+title: Multiple Theme Scopes
+description: Run two or more isolated theme transition systems in the same app, each with its own themes and provider.
+---
+
+`createThemeTransition` returns a self-contained
+`{ ThemeTransitionProvider, useTheme }` API with no module-level
+state. You can call it as many times as you want and each instance
+is fully independent: separate Context, separate state, separate
+animation pipeline.
+
+This is useful when you have parts of your app that need different
+theme sets, for example:
+
+- A multi-tenant dashboard where each organization picks its own
+  theme palette.
+- A learning app with a parent area and a kid area that should look
+  visually distinct.
+- An onboarding flow with its own brand colors before the user
+  enters the main app.
+
+## Pattern
+
+Define each scope in its own file. Export the provider and hook
+under unique names so consumers can pick which one they want.
+
+```ts title="src/lib/marketing-theme.ts"
+import { createThemeTransition } from 'react-native-theme-transition'
+
+const light = { background: '#ffffff', text: '#000000', accent: '#ff6b6b' }
+const dark: Record<keyof typeof light, string> = {
+  background: '#0a0a0a',
+  text: '#ffffff',
+  accent: '#ff6b6b',
+}
+
+export const {
+  ThemeTransitionProvider: MarketingThemeProvider,
+  useTheme: useMarketingTheme,
+} = createThemeTransition({ themes: { light, dark } })
+```
+
+```ts title="src/lib/app-theme.ts"
+import { createThemeTransition } from 'react-native-theme-transition'
+
+const light = { background: '#f5f5f7', text: '#1d1d1f', accent: '#0066cc' }
+const dark: Record<keyof typeof light, string> = {
+  background: '#000000',
+  text: '#f5f5f7',
+  accent: '#2997ff',
+}
+
+export const {
+  ThemeTransitionProvider: AppThemeProvider,
+  useTheme: useAppTheme,
+} = createThemeTransition({ themes: { light, dark } })
+```
+
+## Mounting
+
+Wrap each section of the tree with the matching provider. The
+providers do not interfere with each other and can be siblings or
+nested.
+
+```tsx title="app/_layout.tsx"
+import { Stack } from 'expo-router'
+import { MarketingThemeProvider } from '@/lib/marketing-theme'
+import { AppThemeProvider } from '@/lib/app-theme'
+
+export default function RootLayout() {
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(marketing)" options={{ /* ... */ }}>
+        {() => (
+          <MarketingThemeProvider initialTheme="system">
+            <Stack />
+          </MarketingThemeProvider>
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="(app)">
+        {() => (
+          <AppThemeProvider initialTheme="system">
+            <Stack />
+          </AppThemeProvider>
+        )}
+      </Stack.Screen>
+    </Stack>
+  )
+}
+```
+
+Each component reads from the matching hook:
+
+```tsx title="app/(marketing)/landing.tsx"
+import { useMarketingTheme } from '@/lib/marketing-theme'
+
+export default function Landing() {
+  const { theme } = useMarketingTheme()
+  return <View style={{ backgroundColor: theme.colors.background }} />
+}
+```
+
+```tsx title="app/(app)/home.tsx"
+import { useAppTheme } from '@/lib/app-theme'
+
+export default function Home() {
+  const { theme } = useAppTheme()
+  return <View style={{ backgroundColor: theme.colors.background }} />
+}
+```
+
+## Important Caveats
+
+- **`Appearance.setColorScheme` is global to the OS.** Each scope
+  calls `Appearance.setColorScheme` independently, so the most
+  recently active provider wins. If a screen with the marketing
+  provider is on top while a screen with the app provider is in the
+  background, the OS native UI tracks the marketing provider. This
+  is rarely a problem in practice because only one scope is visible
+  at a time.
+- **Snapshot capture is per-provider.** Each provider's overlay
+  only captures content inside its own subtree. Triggering a
+  transition from a child of `MarketingThemeProvider` will only
+  animate the marketing region; siblings rendered under
+  `AppThemeProvider` are unaffected.
+- **Both providers must be mounted before the user can call their
+  hooks.** Calling `useMarketingTheme()` from a component outside
+  `MarketingThemeProvider` throws the standard
+  `useTheme must be used inside a ThemeTransitionProvider` error.
+
+## When NOT to Use Multiple Scopes
+
+If you just want different colors per route or per component,
+prefer a single provider with a richer theme map. Multiple scopes
+add architectural complexity and only make sense when the theme
+sets are genuinely orthogonal (different brands, different
+audiences, different contexts).
+
+## See Also
+
+- [createThemeTransition](/docs/api/create-theme-transition). The factory.
+- [Migration from another theme system](/docs/recipes/migration). Patterns for moving an existing app onto the library.

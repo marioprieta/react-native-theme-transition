@@ -1,37 +1,39 @@
 ---
 title: Checkmark List
-description: iOS Settings-style list picker with checkmark indicators.
+description: iOS Settings-style list picker with a checkmark indicator driven by `preference`.
 ---
 
-An iOS Settings-style list where the selected theme shows a checkmark.
-Uses `select()` for flicker-free selection and system mode support.
+The classic iOS Settings look: a card with three rows, a checkmark
+on the active one. The checkmark reads `preference` so the `'system'`
+row highlights when the user picks it.
+
+## Example
 
 ```tsx
-import { View, Text, Pressable } from 'react-native';
-import { useTheme } from '@/lib/theme';
+import { Pressable, Text, View } from 'react-native'
+import { useTheme } from '@/lib/theme'
 
-const OPTIONS = ['system', 'light', 'dark'] as const;
-const LABELS = { system: 'System', light: 'Light', dark: 'Dark' };
+const OPTIONS = ['system', 'light', 'dark'] as const
+const LABELS = { system: 'System', light: 'Light', dark: 'Dark' }
 
 export function ThemeList() {
-  const { selected, select, colors, isTransitioning } =
-    useTheme({ initialSelection: 'system' });
+  const { theme, preference, setTheme, isTransitioning } = useTheme()
 
   return (
     <View
       style={{
-        backgroundColor: colors.card,
+        backgroundColor: theme.colors.card,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: theme.colors.border,
         overflow: 'hidden',
       }}
     >
       {OPTIONS.map((option, i) => (
         <Pressable
           key={option}
-          onPress={() => select(option)}
           disabled={isTransitioning}
+          onPress={() => setTheme(option)}
           style={{
             flexDirection: 'row',
             justifyContent: 'space-between',
@@ -39,27 +41,44 @@ export function ThemeList() {
             paddingVertical: 13,
             paddingHorizontal: 16,
             borderBottomWidth: i < OPTIONS.length - 1 ? 1 : 0,
-            borderBottomColor: colors.border,
+            borderBottomColor: theme.colors.border,
           }}
         >
-          <Text style={{ fontSize: 16, color: colors.text }}>
+          <Text style={{ fontSize: 16, color: theme.colors.text }}>
             {LABELS[option]}
           </Text>
-          {option === selected && (
-            <Text style={{ fontSize: 17, color: colors.primary, fontWeight: '600' }}>
+          {option === preference && (
+            <Text
+              style={{
+                fontSize: 17,
+                color: theme.colors.primary,
+                fontWeight: '600',
+              }}
+            >
               ✓
             </Text>
           )}
         </Pressable>
       ))}
     </View>
-  );
+  )
 }
 ```
 
-## Key points
+## Why `preference` and Not `theme.name`
 
-- `useTheme({ initialSelection: 'system' })` — seeds `selected` to `'system'` so "System" is checked on first render
-- The checkmark is a selection indicator, so it needs `select()` — not direct `setTheme`
-- `select()` updates the checkmark position before the screenshot capture
-- `isTransitioning` disables the list during cross-fade
+The checkmark reflects the user's choice, not the rendered theme. If
+the user picks `'system'`, `theme.name` resolves to a concrete theme
+like `'light'` or `'dark'`, and the `'system'` row would never get a
+checkmark.
+
+`preference` is the raw value the user picked and updates
+synchronously inside `setTheme`, so the checkmark moves in the same
+commit as the tap. The engine's `SETTLE.beforeCapture` window gives
+React time to paint the new position before the snapshot.
+
+## See Also
+
+- [Theme Picker](/docs/examples/theme-picker). Segmented control variant.
+- [Persisted Preference](/docs/recipes/persistence). Save the choice across launches.
+- [useTheme](/docs/api/use-theme). The hook reference.
