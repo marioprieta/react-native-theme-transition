@@ -18,7 +18,7 @@ applies to React Native CLI projects; only the file paths change.
     library's API. TypeScript infers theme names and color tokens
     automatically. No manual generics.
 
-    ```ts title="src/lib/theme.ts"
+    ```ts title="lib/theme.ts"
     import { createThemeTransition } from 'react-native-theme-transition'
 
     const light = {
@@ -45,15 +45,9 @@ applies to React Native CLI projects; only the file paths change.
     ```
 
     TypeScript now knows your theme names (`'light' | 'dark'`) and
-    your token keys (`'background' | 'card' | 'text' | …`). Both flow
-    into `useTheme` automatically.
+    your token keys (`'background' | 'card' | 'text' | …`). Both
+    propagate to `useTheme` and `setTheme` automatically.
 
-    By convention, name one token literally `background`. The engine
-    looks for a token with that exact name and uses it as the root
-    fill color behind your tree. If you skip it, the engine falls
-    back to the first token in the theme — usually fine, but easy to
-    surprise yourself when reordering. See
-    [Root Background Color](/docs/api/create-theme-transition#root-background-color).
   </Step>
 
   <Step>
@@ -62,7 +56,9 @@ applies to React Native CLI projects; only the file paths change.
     Place `ThemeTransitionProvider` as high as possible: above your
     navigation container, above any modals. The snapshot capture
     includes everything inside the provider; anything outside it
-    won't appear in the overlay and may flash.
+    won't appear in the overlay and may flash. See the
+    [placement rules](/docs/api/provider#placement) for nesting
+    examples and modal caveats.
 
     ```tsx title="app/_layout.tsx"
     import { ThemeTransitionProvider } from '@/lib/theme'

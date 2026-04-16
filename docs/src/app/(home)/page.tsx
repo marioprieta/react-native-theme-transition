@@ -19,8 +19,8 @@ export default function HomePage() {
             React Native Theme Transition
           </h1>
           <p className="text-base sm:text-lg text-fd-muted-foreground max-w-lg">
-            Smooth, animated theme transitions for React Native. Expo Go
-            compatible, powered by Reanimated.
+            Animated theme transitions for React Native. Nine styles
+            built on Skia, all running in Expo Go.
           </p>
         </div>
 
@@ -28,18 +28,17 @@ export default function HomePage() {
         <div className="w-full min-w-0 overflow-hidden sm:max-w-md">
           <pre className="rounded-xl border border-fd-border bg-fd-card px-4 sm:px-2 py-3 sm:py-4 text-xs sm:text-sm font-mono text-left overflow-x-auto whitespace-pre">
             <span className="text-fd-muted-foreground select-none">$ </span>
-            <span>npx expo install react-native-theme-transition react-native-worklets</span>
+            <span>npx expo install react-native-theme-transition @shopify/react-native-skia react-native-worklets</span>
           </pre>
         </div>
 
         {/* Feature pills */}
         <div className="flex flex-wrap justify-center gap-2">
           {[
+            '9 transition styles',
             'Expo Go ready',
-            '60-120fps',
-            'Multi-theme',
             'System theme sync',
-            '~2.5 kB',
+            'React Compiler safe',
           ].map((feature) => (
             <span
               key={feature}

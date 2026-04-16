@@ -19,8 +19,8 @@ const CYCLE = ['light', 'dark'] as const
 export function ThemeButton() {
   const { theme, setTheme, isTransitioning } = useTheme()
 
-  const current = Math.max(0, CYCLE.indexOf(theme.name as (typeof CYCLE)[number]))
-  const next = CYCLE[(current + 1) % CYCLE.length]
+  const currentIndex = CYCLE.findIndex((name) => name === theme.name)
+  const next = CYCLE[(Math.max(0, currentIndex) + 1) % CYCLE.length]
 
   return (
     <Pressable

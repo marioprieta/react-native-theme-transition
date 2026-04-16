@@ -4,9 +4,10 @@ description: Factory that creates a fully typed theme transition system from you
 ---
 
 `createThemeTransition` validates your configuration at
-initialization and returns a self-contained
-`{ ThemeTransitionProvider, useTheme }` API. There are no
-singletons, so multiple theme scopes can coexist in the same app.
+initialization and returns a provider to wrap your app and a
+`useTheme` hook to read and change the active theme. Both are typed
+against your theme map. Each call creates an isolated instance, so
+multiple theme scopes can coexist in the same app.
 
 TypeScript infers theme names and token keys from `config.themes`,
 so the returned `useTheme` and `setTheme` are fully typed against
@@ -50,12 +51,12 @@ const { ThemeTransitionProvider, useTheme } = createThemeTransition({
 
 | Field | Type | Description |
 |---|---|---|
-| `ThemeTransitionProvider` | `Component` | React provider that supplies animated theme colors via context. Wrap your app tree as high as possible. |
+| `ThemeTransitionProvider` | `Component` | React provider that supplies animated theme colors via context. See [ThemeTransitionProvider](/docs/api/provider) for placement rules and nesting examples. |
 | `useTheme` | `() => UseThemeResult` | Hook that returns the painted theme, the user's preference, the mutator, and the transition flag. See [useTheme](/docs/api/use-theme). |
 
 ## Example
 
-```ts title="src/lib/theme.ts"
+```ts title="lib/theme.ts"
 import { createThemeTransition } from 'react-native-theme-transition'
 
 const light = {
@@ -233,30 +234,6 @@ contrast). Omit the field instead to fall back to the default.
   Do not call `Appearance.setColorScheme` yourself. The library
   tracks system mode through that call. Manual writes desync it on
   Android, and the next `setTheme('system')` will misbehave.
-</Callout>
-
-## Root Background Color
-
-The library paints a solid color behind your inner tree as a
-fallback for any transparent regions the Skia snapshot path can
-leave (for example, the area below a scrolled `ScrollView` on
-Android mid-repaint). This color is picked automatically from the
-active theme. No config is needed.
-
-The resolution rule:
-
-1. If the active theme has a token literally named `background`, use it.
-2. Otherwise, fall back to the first token in the theme.
-
-If you name one of your tokens `background`, it wins automatically.
-
-<Callout type="warn">
-  **ScrollView gotcha (Android).** Don't put `backgroundColor` on a
-  root `ScrollView`'s `style`. Android's native drawing cache keeps
-  off-screen regions on the previous theme's color after a swap. Put
-  it on `contentContainerStyle` instead, or leave the ScrollView
-  transparent and let the library's root background show through.
-  See [Troubleshooting](/docs/guides/troubleshooting).
 </Callout>
 
 ## Reduced Motion

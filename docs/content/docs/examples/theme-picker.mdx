@@ -59,8 +59,8 @@ selected: the library always resolves `'system'` to a real theme like
 `preference` mirrors the raw value the user passed to `setTheme` (or
 the initial `initialTheme` prop). It updates synchronously when
 `setTheme` runs, so the highlight repaints in the same commit. The
-engine's `SETTLE.beforeCapture` window gives React time to paint the
-new selection before the snapshot runs.
+engine waits one frame before capturing, giving React time to paint
+the new selection.
 
 ## With Persistence
 

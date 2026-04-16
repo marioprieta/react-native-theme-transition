@@ -1,7 +1,7 @@
 {
   "name": "react-native-theme-transition",
   "version": "1.0.7",
-  "description": "Smooth, animated theme and dark mode transitions for React Native with circular reveal. Expo Go compatible, powered by Reanimated and Skia.",
+  "description": "Animated theme transitions for React Native. Nine styles built on Skia, all running in Expo Go.",
   "source": "./src/index.ts",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

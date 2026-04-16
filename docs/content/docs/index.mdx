@@ -1,35 +1,30 @@
 ---
 title: Overview
-description: Smooth, animated theme transitions for React Native. Expo Go compatible, powered by Skia and Reanimated.
+description: Animated theme transitions for React Native. Nine styles built on Skia, all running in Expo Go.
 ---
 
-`react-native-theme-transition` brings native-feeling theme
-switching to React Native without any custom native code. It
-captures the current screen into a Skia canvas, swaps your theme
-underneath, and animates the captured frame away with a shader, a
-shape clip, a slide, or a fade. Everything runs on JS, Skia, and
-Reanimated, so the library works in Expo Go with no prebuild.
+`react-native-theme-transition` brings animated theme switching to
+React Native. It snapshots the current screen, swaps your theme
+underneath, and animates the snapshot away with one of nine styles.
+Built on Skia and Reanimated, both bundled in modern Expo SDKs (54+),
+so it works in Expo Go without a prebuild.
 
 ## Highlights
 
-- **Nine transition kinds.** `fade`, `circularReveal`, `heart`,
-  `star`, `wipe`, `slide`, `split`, `pixelize`, `dissolve`. Picked
-  per call via a typed discriminated union. Reveal-style transitions
-  support an `inverted` variant.
-- **Expo Go compatible.** No native modules, no prebuilds. Skia and
-  Reanimated both ship with modern Expo SDKs.
-- **Typed theme management.** One provider, one `useTheme` hook,
-  full generic inference for theme names and token keys.
-- **First-class system mode.** `useTheme()` exposes a `preference`
-  field that can be `'system'` (for pickers and persistence), while
-  `theme` always describes the concrete painted theme (for
-  rendering).
-- **Transition guard.** Concurrent `setTheme` calls return
-  `'ignored'`, so you can wire buttons directly without writing your
-  own queue.
-- **React Compiler ready.** All hooks follow the
+- **Nine transition styles.** `fade`, `circularReveal`, `heart`,
+  `star`, `wipe`, `slide`, `split`, `pixelize`, `dissolve`.
+  Reveal-style transitions support an `inverted` variant.
+- **Expo Go ready.** Works with Expo SDK 54+ out of the box. Bare
+  React Native CLI also supported.
+- **Full TypeScript inference.** `useTheme()` and `setTheme()` know
+  your theme names and color tokens without manual generics.
+- **System theme built in.** Follows OS appearance with zero-flash
+  startup. `preference` and `theme` are kept separate so pickers
+  and persistence work correctly.
+- **Strict runtime validation.** Invalid options throw immediately
+  with clear error messages.
+- **React Compiler compatible.** All hooks follow the
   [Rules of React](https://react.dev/reference/rules).
-- **Tiny footprint.** Around 13 kB of runtime.
 
 ## How It Compares
 

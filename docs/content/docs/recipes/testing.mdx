@@ -7,29 +7,32 @@ Components that consume `useTheme` need a `ThemeTransitionProvider`
 in their test tree. The provider in turn pulls in
 `@shopify/react-native-skia`, `react-native-reanimated`, and
 `react-native-worklets`, none of which run in plain Jest without
-mocks. This recipe shows the minimum mock setup that lets you mount
-a themed component in a test.
+mocks. This recipe shows the minimum mock setup needed to mount a
+themed component in a test.
 
 ## Jest Setup
 
 Create or extend your `jest.setup.js` with the three mocks:
 
 ```js title="jest.setup.js"
-// React Native core APIs the engine reads.
-jest.mock('react-native', () => ({
-  Appearance: {
-    getColorScheme: jest.fn(() => 'light'),
-    setColorScheme: jest.fn(),
-    addChangeListener: jest.fn(() => ({ remove: jest.fn() })),
-  },
-  AppState: {
-    currentState: 'active',
-    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
-  },
-  Dimensions: { get: () => ({ width: 390, height: 844 }) },
-  View: 'View',
-  Image: 'Image',
-}))
+// Override only the React Native APIs the engine reads. Everything
+// else (StyleSheet, Pressable, Text, Platform, …) stays live so your
+// own themed components keep working in tests.
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native')
+  return {
+    ...actual,
+    Appearance: {
+      getColorScheme: jest.fn(() => 'light'),
+      setColorScheme: jest.fn(),
+      addChangeListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
+    AppState: {
+      currentState: 'active',
+      addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
+  }
+})
 
 // Reanimated - only the APIs the state machine touches.
 jest.mock('react-native-reanimated', () => ({

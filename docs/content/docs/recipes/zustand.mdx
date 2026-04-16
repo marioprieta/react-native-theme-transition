@@ -59,6 +59,8 @@ export default function RootLayout() {
 
   if (!hydrated) return null // or your splash component
 
+  // Snapshot read, not a subscription: `initialTheme` is read once on
+  // mount and ignored on re-render, so reactive reads add nothing.
   const colorMode = useThemeStore.getState().colorMode
 
   return (
@@ -68,6 +70,14 @@ export default function RootLayout() {
   )
 }
 ```
+
+<Callout type="info">
+  `useThemeStore.getState()` is deliberate here. `initialTheme` is
+  read once when the provider mounts ([placement rules](/docs/api/provider#initial-theme-behavior))
+  and ignored on subsequent re-renders, so a reactive subscription
+  would never trigger anything. Later theme changes flow through
+  `setTheme` plus `setColorMode` in the settings screen below.
+</Callout>
 
 ### Settings Screen
 
@@ -119,10 +129,10 @@ function ThemeSettings() {
 ```
 
 <Callout type="info">
-  `preference` updates synchronously before the engine's
-  `SETTLE.beforeCapture` window, so the highlight paints before the
-  snapshot runs. Reading the pill from the store directly would lag
-  and show the wrong highlight during the transition.
+  `preference` updates synchronously inside `setTheme`, so the
+  highlight paints in the same commit as the tap. Reading from the
+  store instead would lag one frame and show the wrong highlight
+  during the transition.
 </Callout>
 
 ## Redux / Redux Toolkit

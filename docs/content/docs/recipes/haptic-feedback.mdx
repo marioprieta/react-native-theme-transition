@@ -14,7 +14,7 @@ behavior.
 
 ### On Every Animated Transition
 
-```ts title="src/lib/theme.ts"
+```ts title="lib/theme.ts"
 import * as Haptics from 'expo-haptics'
 import { createThemeTransition } from 'react-native-theme-transition'
 
@@ -65,7 +65,7 @@ The per-call callback fires **after** the config-level one. See
 path: animated, instant, system-driven, and capture-failure
 fallbacks. Use it as the single source of truth for tracking.
 
-```ts title="src/lib/theme.ts"
+```ts title="lib/theme.ts"
 export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
   themes: { light, dark },
   onThemeChange: (name) => {

@@ -141,7 +141,9 @@ pass `animated: false` per call:
 import { useEffect, useState } from 'react'
 import { AccessibilityInfo } from 'react-native'
 
-function useReducedMotion() {
+// Named differently from the removed v1 export so a half-finished
+// migration doesn't silently shadow a stale `useReducedMotion` import.
+function usePrefersReducedMotion() {
   const [rm, setRm] = useState(false)
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setRm)
@@ -151,7 +153,7 @@ function useReducedMotion() {
   return rm
 }
 
-const reducedMotion = useReducedMotion()
+const reducedMotion = usePrefersReducedMotion()
 setTheme('dark', { animated: !reducedMotion })
 ```
 
@@ -171,24 +173,22 @@ setTheme('dark', { duration: 500 })
 
 ### `config.backgroundColor` Is Gone
 
-The library now picks the `background` token from the active theme
-automatically. If your background token is named differently, alias
-it:
+The library no longer paints a root background behind the inner
+tree. Set `backgroundColor` on your own root `View` as with any
+standard React Native app. If you were using the v1 callback, just
+delete it and apply the color to your root View style:
 
-```ts
+```tsx
 // 1.x
 createThemeTransition({
   themes: { light: { bg: '#fff' }, dark: { bg: '#111' } },
   backgroundColor: (colors) => colors.bg,
 })
 
-// 2.0: rename or alias to `background`
-createThemeTransition({
-  themes: {
-    light: { bg: '#fff', background: '#fff' },
-    dark:  { bg: '#111', background: '#111' },
-  },
-})
+// 2.0: delete the callback, style your root View directly
+<View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+  <App />
+</View>
 ```
 
 ### Renamed Option Fields
@@ -213,7 +213,7 @@ clearer mental model.
 
 <Steps>
   <Step>**Install** the library and its peer dependencies. See [Getting Started](/docs/getting-started).</Step>
-  <Step>**Create the theme file** that defines your tokens (include a `background` key) and calls `createThemeTransition`.</Step>
+  <Step>**Create the theme file** that defines your tokens and calls `createThemeTransition`.</Step>
   <Step>**Wrap with the provider** at the root of your app.</Step>
   <Step>**Replace** color references with `useTheme().theme.colors`.</Step>
   <Step>**Remove** the old theme context/provider.</Step>
@@ -249,7 +249,7 @@ function ThemeProvider({ children }) {
 
 ### After
 
-```ts title="src/lib/theme.ts"
+```ts title="lib/theme.ts"
 import { createThemeTransition } from 'react-native-theme-transition'
 
 export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
@@ -268,7 +268,7 @@ const toggle = () => setTheme(theme.name === 'light' ? 'dark' : 'light')
 
 ## From React Navigation Theming Only
 
-```ts title="src/lib/theme.ts"
+```ts title="lib/theme.ts"
 const light = {
   primary: '#007AFF', background: '#ffffff', card: '#ffffff',
   text: '#000000', border: '#d8d8d8', notification: '#ff3b30',
@@ -330,7 +330,7 @@ applied to expo-router's `Stack`.
 If your codebase already exposes a `useTheme` with a different shape,
 wrap the library's hook to keep your call sites unchanged:
 
-```ts title="src/lib/theme.ts"
+```ts title="lib/theme.ts"
 const api = createThemeTransition({ themes: { light, dark } })
 
 export const ThemeTransitionProvider = api.ThemeTransitionProvider
@@ -351,7 +351,7 @@ export function useTheme() {
 ## Migration Checklist
 
 - [ ] Install the library and peer dependencies.
-- [ ] Create the theme file with matching token keys; include a `background` token.
+- [ ] Create the theme file with matching token keys.
 - [ ] Wrap the root with `ThemeTransitionProvider`.
 - [ ] Replace color references with `useTheme().theme.colors`.
 - [ ] Replace toggle logic with `setTheme()`.

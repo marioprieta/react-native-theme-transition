@@ -74,8 +74,8 @@ checkmark.
 
 `preference` is the raw value the user picked and updates
 synchronously inside `setTheme`, so the checkmark moves in the same
-commit as the tap. The engine's `SETTLE.beforeCapture` window gives
-React time to paint the new position before the snapshot.
+commit as the tap. The engine waits one frame before capturing,
+giving React time to paint the new position.
 
 ## See Also
 

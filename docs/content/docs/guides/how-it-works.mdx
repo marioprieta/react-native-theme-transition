@@ -3,13 +3,11 @@ title: How It Works
 description: The snapshot-overlay technique behind smooth, native-feeling theme transitions in pure JavaScript.
 ---
 
-Every transition is the same simple trick. Take a picture of what's
-on screen, put it on top, change the colors underneath, then
-animate the picture away. The picture is a Skia `SkImage`, the
-animation runs on the UI thread via Reanimated, and the whole
-pipeline is policy-free. There are no Reduce Motion checks, no
-`setTimeout` fallbacks, no magic defaults beyond the per-kind
-durations.
+Every transition uses the same trick. Take a picture of what's on
+screen, put it on top, change the colors underneath, then animate
+the picture away. The picture is a Skia `SkImage`. The animation
+runs on the UI thread via Reanimated. No Reduce Motion checks and
+no magic defaults beyond the per-kind durations.
 
 ## The Two-Commit Flow
 
@@ -82,10 +80,10 @@ that actually need it, so fade and wipe save one frame of latency.
 
 ## Why Snapshots?
 
-Most theme-transition libraries reach for a custom native module to
-manipulate the view hierarchy directly. The snapshot approach needs
-zero native code. Skia and Reanimated do everything, both ship in
-modern Expo SDKs, and the result works in Expo Go.
+Most theme-transition libraries use a custom native module to
+manipulate the view hierarchy directly. The snapshot approach runs
+entirely on Skia and Reanimated, both bundled in modern Expo SDKs,
+so it works in Expo Go without a prebuild.
 
 The trade-off is that the overlay is a still image. Any live
 content behind it (a video, a Lottie animation, a camera preview, a
