@@ -61,7 +61,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated'
-import { ABSOLUTE_FILL, TAG } from './constants'
+import { ABSOLUTE_FILL, FLEX_FILL, TAG } from './constants'
 import { captureView } from './overlay/captureView'
 import { calculateMaxRadius, resolveOrigin } from './overlay/resolveOrigin'
 import { SkiaOverlay } from './overlay/SkiaOverlay'
@@ -628,21 +628,6 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
 
     const overlayParamsForRender = overlayParams ?? DEFAULT_OVERLAY_PARAMS
 
-    // Root background color painted BEHIND the inner tree. Any
-    // transparent regions left by the snapshot path (e.g. the area
-    // below a scrolled ScrollView on Android mid-repaint) fall back to
-    // this color instead of the Activity's default window color.
-    //
-    // Convention: the library reads a `background` token from the
-    // active theme. Themes without one fall back to the first token -
-    // add a `background` alias if the auto-pick is wrong.
-    const rootWrapperStyle = useMemo(() => {
-      const bg =
-        (activeTheme.colors as Record<string, string>).background ??
-        (Object.values(activeTheme.colors)[0] as string)
-      return { flex: 1, backgroundColor: bg }
-    }, [activeTheme.colors])
-
     const handleInnerLayout = useCallback((e: LayoutChangeEvent) => {
       const { width, height } = e.nativeEvent.layout
       innerSizeRef.current = { width, height }
@@ -650,13 +635,8 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
 
     return (
       <Context value={contextValue}>
-        <View style={rootWrapperStyle} collapsable={false}>
-          <View
-            ref={innerRef}
-            style={rootWrapperStyle}
-            collapsable={false}
-            onLayout={handleInnerLayout}
-          >
+        <View style={FLEX_FILL} collapsable={false}>
+          <View ref={innerRef} style={FLEX_FILL} collapsable={false} onLayout={handleInnerLayout}>
             {children}
           </View>
           <Animated.View style={[ABSOLUTE_FILL, blockerStyle]} />

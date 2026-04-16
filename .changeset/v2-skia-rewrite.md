@@ -61,9 +61,9 @@ binary `'light' | 'dark'` classifier derived from `darkThemes`.
 raw pick (including `'system'`) and updates synchronously inside
 `setTheme` so pickers can drop their optimistic local state. `selected`,
 `select`, `initialSelection`, `SelectOptions`, `UseThemeOptions`, and
-`useReducedMotion` are gone. The engine's internal `settleBeforeCapture`
-gives React batching time to paint before the snapshot is taken, so no
-hook magic is needed. See the [Migration guide](https://react-native-theme-transition.vercel.app/docs/recipes/migration).
+`useReducedMotion` are gone. The engine's internal `SETTLE.beforeCapture`
+wait gives React batching time to paint before the snapshot is taken, so
+no hook magic is needed. See the [Migration guide](https://react-native-theme-transition.vercel.app/docs/recipes/migration).
 
 ### Breaking: `setTheme` return type
 
@@ -92,10 +92,9 @@ usually enough.
   calibrated default (350ms fade / reveal / strip, 800ms shape, 750ms
   shader). A global override would flatten that calibration. Override
   per call with `setTheme(name, { duration: 400 })` when you need it.
-- **`backgroundColor`**: removed. The library now auto-picks a token
-  literally named `background` from the active theme as the root
-  fallback color (with a silent fallback to the first token if absent).
-  Rename your bg token to `background` to opt in.
+- **`backgroundColor`**: removed. The library no longer paints a
+  root background behind the inner tree. Set `backgroundColor` on
+  your own root `View` as with any standard React Native app.
 
 ### Breaking: renamed option fields
 
@@ -152,10 +151,13 @@ const meta = TRANSITION_META[transition]
 
 ### Internal changes worth noting
 
-- Cleanup is driven by Reanimated's `withTiming` completion callback via
-  `scheduleOnRN`. No more `setTimeout(finish, duration + 50)`. Callbacks
-  fire at the exact end frame on every device.
-- `settleTreeRepaint` is gated to reveal / shape / capturesNew transitions
+- Cleanup timer was tightened from `setTimeout(finish, duration + 50)`
+  to `setTimeout(finish, duration)`, removing v1's safety buffer that
+  stacked latency on fast devices. Reanimated 4's worklet completion
+  callback would be cleaner, but it doesn't reliably fire for the
+  nested-async closures the engine creates — see the comment on
+  `finishTimerRef`.
+- `SETTLE.treeRepaint` is gated to reveal / shape / capturesNew transitions
   so fade / wipe / split / dissolve save a frame of start latency.
 - `OverlayParams` and the `DEFAULT_*` constants live in
   `src/overlay/types.ts` as a single source of truth for the engine and
