@@ -223,6 +223,48 @@ const colorMode = useThemeStore((s) => s.colorMode)
 <ThemeTransitionProvider initialTheme={colorMode}>
 ```
 
+## iOS 26 Liquid Glass Containers Freeze Mid-Transition
+
+**Symptom.** An `expo-glass-effect` `GlassView` (or
+`@callstack/liquid-glass`, or any iOS 26 liquid glass container)
+used as app-level content stays frozen during the animation and
+snaps to its new appearance at the end. On `light → dark` the
+card looks whitish for the whole fade, then jumps.
+
+**Cause.** Skia's `makeImageFromView` captures through UIKit's
+`drawViewHierarchyInRect:afterScreenUpdates:YES`, which bakes
+the current `UIVisualEffectView` state into the bitmap. Liquid
+glass needs that view alive to do real-time lensing, specular
+highlights, and ambient refraction. Once those effects are
+frozen into a texture, they can't keep running. It's not a bug
+inside the snapshot path, it's how iOS 26 composites glass.
+
+**What still works.**
+
+- **Native tab bars, native-stack headers (including iOS 26's
+  liquid-glass headers), and system sheet backdrops.** The OS
+  composites these outside the snapshot path, so they animate
+  correctly.
+- **`BlurView` from `expo-blur`.** The classic `UIBlurEffect`
+  does no lensing or highlights, so frozen pixels look right the
+  whole way through.
+
+**Fix.** For app-level glass (hero cards, large glass panels in
+the middle of the viewport), use `BlurView`, use the system
+glass on tab bars and nav headers, or paint the surface with a
+solid theme token. Reserve `GlassView` for places that don't
+need to animate through a theme change.
+
+Proper support would mean mounting live `GlassView`s above the
+Skia overlay during the animation (a "transient re-hosted glass
+layer"). Possible in theory, hard in practice. The biggest
+blocker is that Reanimated's `measure()` on Fabric doesn't
+return `borderRadius` or transforms, so the transient copy can't
+match the original without extra registration boilerplate. Modal
+`UIWindow`s and GPU cost on dense glass layouts make it worse.
+Progress in the
+[issue tracker](https://github.com/marioprieta/react-native-theme-transition/issues).
+
 ## Duplicate Plugin / Preset Detected
 
 From Expo SDK 55+, `babel-preset-expo` already includes
