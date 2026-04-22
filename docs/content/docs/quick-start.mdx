@@ -1,102 +1,142 @@
 ---
 title: Quick Start
-description: Define themes, wrap your app, and start using theme colors in three steps.
+description: Define your themes, wrap your app, and animate your first theme switch in three steps.
 ---
+
+This walkthrough goes from an empty Expo project to a working
+animated theme switch in three files. It assumes you already
+[installed the package](/docs/getting-started). The same setup
+applies to React Native CLI projects; only the file paths change.
 
 ## Setup
 
 <Steps>
   <Step>
-    ### Define your themes
+    ### Define Your Themes
 
-    Create a single file that defines your themes and exports the API.
-    TypeScript infers theme names and color tokens automatically.
+    Create a single file that defines your themes and exports the
+    library's API. TypeScript infers theme names and color tokens
+    automatically. No manual generics.
 
-    ```ts title="src/lib/theme.ts"
-    import { createThemeTransition } from 'react-native-theme-transition';
+    ```ts title="lib/theme.ts"
+    import { createThemeTransition } from 'react-native-theme-transition'
 
     const light = {
-      background: '#ffffff',
-      card:       '#f5f5f5',
-      text:       '#000000',
-      border:     '#e0e0e0',
-      primary:    '#007AFF',
+      background:   '#ffffff',
+      card:         '#f5f5f5',
+      text:         '#000000',
+      border:       '#e0e0e0',
+      primary:      '#007AFF',
       notification: '#ff3b30',
-    };
+    }
 
     const dark: Record<keyof typeof light, string> = {
-      background: '#000000',
-      card:       '#1c1c1e',
-      text:       '#ffffff',
-      border:     '#333333',
-      primary:    '#0A84FF',
+      background:   '#000000',
+      card:         '#1c1c1e',
+      text:         '#ffffff',
+      border:       '#333333',
+      primary:      '#0A84FF',
       notification: '#ff453a',
-    };
+    }
 
-    export const { ThemeTransitionProvider, useTheme } =
-      createThemeTransition({
-        themes: { light, dark },
-      });
-
-    // TypeScript infers everything:
-    // - Theme names: 'light' | 'dark'
-    // - Color tokens: 'background' | 'card' | 'text' | 'border' | 'primary' | 'notification'
+    export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
+      themes: { light, dark },
+    })
     ```
-  </Step>
-  <Step>
-    ### Wrap your app
 
-    Place `ThemeTransitionProvider` as high as possible — above navigation,
-    above modals. The screenshot captures everything inside the provider.
+    TypeScript now knows your theme names (`'light' | 'dark'`) and
+    your token keys (`'background' | 'card' | 'text' | …`). Both
+    propagate to `useTheme` and `setTheme` automatically.
+
+  </Step>
+
+  <Step>
+    ### Wrap Your App
+
+    Place `ThemeTransitionProvider` as high as possible: above your
+    navigation container, above any modals. The snapshot capture
+    includes everything inside the provider; anything outside it
+    won't appear in the overlay and may flash. See the
+    [placement rules](/docs/api/provider#placement) for nesting
+    examples and modal caveats.
 
     ```tsx title="app/_layout.tsx"
-    import { ThemeTransitionProvider } from '@/lib/theme';
+    import { ThemeTransitionProvider } from '@/lib/theme'
 
     export default function RootLayout() {
       return (
         <ThemeTransitionProvider initialTheme="system">
           <App />
         </ThemeTransitionProvider>
-      );
+      )
     }
     ```
 
-    `initialTheme="system"` reads the OS appearance synchronously on launch and
-    subscribes to OS changes. See [System Theme](/docs/examples/system-theme) for details.
-  </Step>
-  <Step>
-    ### Use in components
+    `initialTheme="system"` reads the OS appearance synchronously on
+    launch and subscribes to OS changes. See
+    [System Theme](/docs/examples/system-theme) for details.
 
-    Call `useTheme()` to read colors, get the current theme name, and trigger transitions.
+    To remember the user's choice across launches (instead of always
+    starting in system mode), see the
+    [Persistence recipe](/docs/recipes/persistence). It reads the
+    stored value once at boot and passes it as `initialTheme`.
+  </Step>
+
+  <Step>
+    ### Use in Components
+
+    Call `useTheme()` to read the painted theme, the user's
+    preference, the mutator, and the transition flag.
 
     ```tsx title="app/index.tsx"
-    import { useTheme } from '@/lib/theme';
+    import { Pressable, Text, View } from 'react-native'
+    import { useTheme } from '@/lib/theme'
 
-    function MyScreen() {
-      const { colors, name, setTheme, isTransitioning } = useTheme();
+    export default function Home() {
+      const { theme, preference, setTheme, isTransitioning } = useTheme()
 
       return (
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
-          <Text style={{ color: colors.text }}>Current: {name}</Text>
+        <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+          <Text style={{ color: theme.colors.text }}>
+            Current: {theme.name}
+          </Text>
           <Pressable
-            onPress={() => setTheme(name === 'light' ? 'dark' : 'light')}
             disabled={isTransitioning}
+            onPress={() => setTheme(theme.name === 'dark' ? 'light' : 'dark')}
           >
-            <Text style={{ color: colors.primary }}>Toggle theme</Text>
+            <Text style={{ color: theme.colors.primary }}>Toggle theme</Text>
           </Pressable>
         </View>
-      );
+      )
     }
     ```
 
-    `isTransitioning` is `true` while the fade animation is running. Disabling buttons
-    during this time prevents double-taps that would be rejected by the library anyway.
+    `useTheme()` returns four fields:
+
+    - **`theme`**. What's painted right now. `theme.name` is always
+      a concrete theme (never `'system'`), `theme.colors` holds the
+      resolved tokens, `theme.scheme` is `'light'` or `'dark'`. Use
+      it for styling, toggles, and asset lookups. Read `theme.scheme`
+      whenever you want a binary dark/light flag (for example, to
+      bridge into React Navigation's `dark` prop) — it stays correct
+      even if you grow beyond two themes.
+    - **`preference`**. The theme the user explicitly picked. Can
+      be `'system'`. Use it for picker highlights and persistence.
+    - **`setTheme`**. Change the preference. Accepts a concrete
+      name or `'system'`.
+    - **`isTransitioning`**. `true` while the overlay animation is
+      running. Use it to disable interactive controls.
+
+    See [useTheme](/docs/api/use-theme#theme-vs-preference) for the
+    full decision table.
   </Step>
 </Steps>
 
-## What's next?
+## See Also
 
-- [API Reference](/docs/api/create-theme-transition) — full configuration options
-- [Theme Picker example](/docs/examples/theme-picker) — segmented control with selection tracking
-- [System Theme](/docs/examples/system-theme) — follow OS appearance automatically
-- [Expo Router integration](/docs/recipes/expo-router) — typed navigation colors
+- [createThemeTransition](/docs/api/create-theme-transition). Every config option.
+- [useTheme](/docs/api/use-theme). The hook and `setTheme` reference.
+- [Theme Picker](/docs/examples/theme-picker). Segmented control with `'system'` highlight.
+- [System Theme](/docs/examples/system-theme). Follow OS appearance.
+- [Expo Router integration](/docs/recipes/expo-router). Typed navigation colors.
+- [How transitions work](/docs/guides/how-it-works). The capture, swap, animate model.

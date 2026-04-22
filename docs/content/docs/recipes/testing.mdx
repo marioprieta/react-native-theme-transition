@@ -1,0 +1,161 @@
+---
+title: Testing Components That Use useTheme
+description: Set up Jest mocks for Skia, Reanimated, and Worklets so components that read from the library can be tested headlessly.
+---
+
+Components that consume `useTheme` need a `ThemeTransitionProvider`
+in their test tree. The provider in turn pulls in
+`@shopify/react-native-skia`, `react-native-reanimated`, and
+`react-native-worklets`, none of which run in plain Jest without
+mocks. This recipe shows the minimum mock setup needed to mount a
+themed component in a test.
+
+## Jest Setup
+
+Create or extend your `jest.setup.js` with the three mocks:
+
+```js title="jest.setup.js"
+// Override only the React Native APIs the engine reads. Everything
+// else (StyleSheet, Pressable, Text, Platform, …) stays live so your
+// own themed components keep working in tests.
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native')
+  return {
+    ...actual,
+    Appearance: {
+      getColorScheme: jest.fn(() => 'light'),
+      setColorScheme: jest.fn(),
+      addChangeListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
+    AppState: {
+      currentState: 'active',
+      addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
+  }
+})
+
+// Reanimated - only the APIs the state machine touches.
+jest.mock('react-native-reanimated', () => ({
+  __esModule: true,
+  default: { View: 'Animated.View' },
+  useSharedValue: (initial) => ({ value: initial, set: jest.fn() }),
+  useDerivedValue: (fn) => ({ value: fn() }),
+  useAnimatedStyle: (fn) => fn(),
+  useAnimatedProps: (fn) => fn(),
+  withTiming: (_val, _config, cb) => cb,
+  Easing: { out: () => () => 0, cubic: () => 0 },
+}))
+
+// Skia - the overlay primitives, plus a fake snapshot pipeline.
+jest.mock('@shopify/react-native-skia', () => {
+  const mockPath = () => ({
+    addCircle: jest.fn(),
+    moveTo: jest.fn(),
+    lineTo: jest.fn(),
+    cubicTo: jest.fn(),
+    close: jest.fn(),
+  })
+  return {
+    Canvas: 'Canvas',
+    Image: 'SkiaImage',
+    Group: 'Group',
+    Circle: 'Circle',
+    Rect: 'Rect',
+    Fill: 'Fill',
+    Shader: 'Shader',
+    ImageShader: 'ImageShader',
+    usePathInterpolation: () => ({ value: mockPath() }),
+    Skia: {
+      Path: { Make: mockPath },
+      RuntimeEffect: { Make: jest.fn(() => ({})) },
+    },
+    makeImageFromView: jest.fn(() =>
+      Promise.resolve({
+        makeNonTextureImage: () => ({ dispose: jest.fn(), width: () => 390, height: () => 844 }),
+        dispose: jest.fn(),
+      }),
+    ),
+  }
+})
+
+// Worklets - only `scheduleOnRN` is reached by the engine.
+jest.mock('react-native-worklets', () => ({
+  scheduleOnRN: (fn) => fn(),
+}))
+```
+
+Wire it from your `jest.config.js`:
+
+```js title="jest.config.js"
+module.exports = {
+  preset: 'jest-expo',
+  setupFiles: ['<rootDir>/jest.setup.js'],
+}
+```
+
+## Testing a Themed Component
+
+Once the mocks are in place, you can test components normally:
+
+```tsx title="__tests__/Card.test.tsx"
+import { render } from '@testing-library/react-native'
+import { ThemeTransitionProvider } from '@/lib/theme'
+import { Card } from '@/components/Card'
+
+describe('Card', () => {
+  it('renders the title in the active theme color', () => {
+    const { getByText } = render(
+      <ThemeTransitionProvider initialTheme="light">
+        <Card title="Hello" />
+      </ThemeTransitionProvider>,
+    )
+    expect(getByText('Hello')).toBeTruthy()
+  })
+})
+```
+
+## Testing `setTheme` Behavior
+
+The mock above replaces the animation pipeline with a no-op, so
+`setTheme` runs through its guards and state machine but does not
+actually render an overlay. This is enough to test the discriminated
+return value, callback firing, and `theme` / `preference` state
+transitions.
+
+```tsx title="__tests__/ThemePicker.test.tsx"
+import { fireEvent, render } from '@testing-library/react-native'
+import { ThemeTransitionProvider } from '@/lib/theme'
+import { ThemePicker } from '@/components/ThemePicker'
+
+it('updates the highlight when the user taps a different option', () => {
+  const { getByText } = render(
+    <ThemeTransitionProvider initialTheme="light">
+      <ThemePicker />
+    </ThemeTransitionProvider>,
+  )
+  fireEvent.press(getByText('Dark'))
+  // `preference` updates synchronously inside `setTheme`, so the
+  // highlight has already moved to the dark option by the time the
+  // press handler returns.
+})
+```
+
+## Caveats
+
+- The mocks fake the Skia capture and Reanimated animation pipelines,
+  so visual transitions are NOT exercised in tests. You are testing
+  the state machine and the React tree, not the actual animation.
+  For visual regression, use Maestro, Detox, or Storybook on a real
+  device.
+- The mocks pin every shared value to a static initial value. If
+  your component reads `progress.value` directly (rare), it will
+  always see `0`.
+- `makeImageFromView` resolves to a fake `SkImage`. The snapshot
+  capture path runs end-to-end but every transition behaves as if
+  the snapshot succeeded, so you can not directly test the
+  capture-failure fallback in a unit test.
+
+## See Also
+
+- [How transitions work](/docs/guides/how-it-works). The state machine these mocks stand in for.
+- [Callbacks](/docs/guides/callbacks). The callback firing order tested above.

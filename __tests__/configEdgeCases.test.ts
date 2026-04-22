@@ -13,13 +13,13 @@ describe('createThemeTransition — config edge cases', () => {
     ).not.toThrow()
   })
 
-  it('accepts empty darkThemes array', () => {
+  it('throws on empty darkThemes array', () => {
     expect(() =>
       createThemeTransition({
         themes: { light, dark },
         darkThemes: [],
       }),
-    ).not.toThrow()
+    ).toThrow(/`darkThemes` cannot be an empty array/)
   })
 
   it('accepts all callback options', () => {
@@ -33,11 +33,10 @@ describe('createThemeTransition — config edge cases', () => {
     ).not.toThrow()
   })
 
-  it('accepts duration with systemThemeMap and darkThemes together', () => {
+  it('accepts systemThemeMap and darkThemes together', () => {
     expect(() =>
       createThemeTransition({
         themes: { light, dark },
-        duration: 200,
         systemThemeMap: { light: 'light', dark: 'dark' },
         darkThemes: ['dark'],
         onTransitionStart: () => {},

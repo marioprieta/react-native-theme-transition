@@ -6,6 +6,8 @@
     "zustand",
     "expo-router",
     "haptic-feedback",
+    "multiple-scopes",
+    "testing",
     "migration"
   ]
 }

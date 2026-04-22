@@ -1,0 +1,16 @@
+# Normalize line endings to LF for everything text-like.
+# Keeps source identical across Windows/macOS/Linux contributors and
+# avoids "entire file changed" diffs when someone edits on a different OS.
+* text=auto eol=lf
+
+# Explicit binary types so Git never tries to munge them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp4 binary
+*.mov binary
+*.webm binary
+*.tgz binary
+*.zip binary

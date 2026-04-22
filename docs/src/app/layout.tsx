@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     template: '%s | React Native Theme Transition',
   },
   description:
-    'Smooth, animated theme transitions for React Native. Expo Go compatible, 100% JS, powered by Reanimated.',
+    'Animated theme transitions for React Native. Nine styles built on Skia, all running in Expo Go.',
 };
 
 const inter = Inter({ subsets: ['latin'] });

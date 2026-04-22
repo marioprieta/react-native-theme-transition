@@ -1,156 +1,265 @@
 ---
 title: useTheme
-description: Hook returning the current theme state, transition controls, and optional selection tracking.
+description: Read the painted theme, the user's preference, the mutator, and the transition flag from the nearest provider.
 ---
 
-Returns the current theme state and a function to trigger transitions.
-Throws if called outside a `ThemeTransitionProvider`.
+`useTheme` returns the painted theme, the user's preference, the
+`setTheme` mutator, and an `isTransitioning` flag. It throws if
+called outside a `ThemeTransitionProvider`.
 
-## Basic usage
-
-```ts
-const { colors, name, setTheme, isTransitioning } = useTheme();
-```
-
-| Property | Type | Description |
-|---|---|---|
-| `colors` | `{ [token]: string }` | Current theme's color values, fully typed to your token names. |
-| `name` | `ThemeName` | Active theme name (resolved, never `'system'`). |
-| `setTheme` | `(name \| 'system', opts?) => boolean` | Trigger transition or enter system mode. Returns `true` if accepted, `false` if rejected. |
-| `isTransitioning` | `boolean` | `true` from after the screenshot is captured until the fade ends. |
-
-### Color tokens
-
-Fully typed to your token names. TypeScript provides autocomplete:
+## Reference
 
 ```ts
-colors.background  // autocomplete works
-colors.foo         // TypeScript error
+const { theme, preference, setTheme, isTransitioning } = useTheme()
 ```
 
-### Active theme name
+The hook is created by [createThemeTransition](/docs/api/create-theme-transition)
+and is fully typed against your theme map. `theme.name`,
+`theme.colors`, and `setTheme`'s argument all narrow to the names
+you defined in `themes`.
 
-Always the resolved theme name, never `'system'`. Even in system mode, `name` returns
-the actual theme (`'light'` or `'dark'`, or whatever `systemThemeMap` resolves to).
+## Returns
 
-### Transition state
-
-`true` from after the screenshot is captured until the fade completes. Touch input
-is blocked immediately when `setTheme` is called, regardless of this flag.
-Use it to:
-- Disable toggle buttons (`disabled={isTransitioning}`)
-- Defer expensive renders
-- Show loading indicators
-
-<Callout type="info">
-  Touch blocking starts immediately when `setTheme()` is called (synchronous, via
-  Reanimated shared value). `isTransitioning` becomes `true` later, after the screenshot
-  is captured. Use `disabled={isTransitioning}` on buttons as a convenience — the library
-  already blocks touch input internally from the moment `setTheme()` is called.
-</Callout>
-
-## Changing themes
-
-| Param | Type | Description |
+| Field | Type | Description |
 |---|---|---|
-| `name` | `ThemeName \| 'system'` | Target theme or system mode |
-| `options` | `SetThemeOptions` | Optional transition configuration |
+| `theme.name` | `Names` | The theme currently painted on screen. Always concrete. Never `'system'`. |
+| `theme.colors` | `Record<Token, string>` | Resolved color tokens for the painted theme. |
+| `theme.scheme` | `'light' \| 'dark'` | Binary classification, derived from `darkThemes`. |
+| `preference` | `Names \| 'system'` | What the user explicitly picked. Mirrors the last value passed to `setTheme`. |
+| `isTransitioning` | `boolean` | `true` while a transition overlay is visible. |
+| `setTheme` | `(name, opts?) => 'accepted' \| 'ignored'` | Change the user's preference. See [setTheme](#settheme) below. |
 
-### Transition options
+## Theme vs Preference
 
-| Option | Default | Description |
+The hook exposes two related but distinct values, and choosing the
+right one matters.
+
+- **`theme`** describes what is currently painted on screen.
+  `theme.name` is always concrete (never `'system'`). When the user
+  picks `'system'`, the library resolves it via
+  [systemThemeMap](/docs/api/create-theme-transition#systemthememap)
+  and exposes the result here.
+- **`preference`** describes what the user explicitly picked. It can
+  be `'system'`. It mirrors the last argument passed to `setTheme`.
+
+### Decision Table
+
+| You want to | Read | Why |
 |---|---|---|
-| `animated` | `true` | `false` for instant switch, no screenshot or animation |
-| `onTransitionStart` | — | Fires after config-level callback, animated only |
-| `onTransitionEnd` | — | Fires after config-level callback, animated only |
+| Style a component | `theme.colors.*` | Real values, resolved. |
+| `StatusBar` content style and `isDark` checks | `theme.scheme` | Binary, regardless of theme count. |
+| Toggle dark to light | `theme.name` | Always concrete, works in system mode. |
+| Per-theme asset (e.g. `logos[name]`) | `theme.name` | Always a real theme key. |
+| Analytics for what was rendered | `theme.name` | The painted theme. |
+| Theme picker highlight | `preference` | Must be able to show `'system'` as selected. |
+| Analytics for what the user picked | `preference` | Carries intent, including `'system'`. |
+| Persist the user's choice | `preference` | Restore the same intent on the next launch. |
 
-```ts
-setTheme('dark', {
-  onTransitionStart: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
-});
-```
+### Common Mistakes
 
-### Behavior rules
-
-1. **Same theme** — returns `false` (no-op)
-2. **During transition** — returns `false` (no queue, no error). System mode is **not** activated even if `'system'` was passed — retry after `isTransitioning` becomes `false`
-3. **`'system'`** — enters system-following mode, subscribes to OS changes
-4. **Explicit name** — exits system-following mode
-5. **`animated: false`** — instant switch, only `onThemeChange` fires
-6. **Capture failure** — falls back to instant switch, `onTransitionEnd` skipped
-
----
-
-## Selection tracking
-
-When building theme selection UIs (button groups, toggles, checkmark lists),
-pass an options object to activate **selection tracking** with transition-safe timing.
-
-```ts
-const { colors, name, setTheme, isTransitioning, selected, select } =
-  useTheme({ initialSelection: 'system' });
-```
-
-| Extra property | Type | Description |
-|---|---|---|
-| `selected` | `ThemeName \| 'system'` | Currently selected option (may be `'system'`). |
-| `select` | `(option) => void` | Select a theme with transition-safe timing. |
-
-### Initial selection value
-
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `initialSelection` | `ThemeName \| 'system'` | current theme name | Starting value for `selected` (read once) |
-
-`initialSelection` seeds the initial `selected` state. When omitted, defaults to the
-current theme name from context.
-
-### Transition-safe timing
-
-On iOS 120Hz displays, calling `setSelected()` and `setTheme()` in the same event
-handler doesn't give React enough time to paint the selection before the library
-captures the screenshot. `select` solves this by:
-
-1. Updating the selection state immediately
-2. Deferring `setTheme` by one `requestAnimationFrame`
-3. Using an internal press lock ref to prevent rapid presses during transitions
-
-If `select()` is called during a transition, it's silently ignored (returns without action).
-Add `disabled={isTransitioning}` to your Pressable for visual feedback — but even without it,
-the internal lock prevents race conditions.
-
-### When to use which
-
-<Callout type="info">
-  If your component has a visual indicator that changes on theme switch (highlighted
-  button, toggle thumb, checkmark), use `useTheme({})` or `useTheme({ initialSelection })`.
-  If your component just reads colors or has a static label, plain `useTheme()` is sufficient.
-</Callout>
-
-| Scenario | Call |
-|---|---|
-| Segmented picker with system option | `useTheme({ initialSelection: 'system' })` |
-| Dark mode toggle | `useTheme({})` — defaults to current theme |
-| Checkmark list with system | `useTheme({ initialSelection: 'system' })` |
-| Static "Switch theme" button | `useTheme()` — no selection tracking needed |
-
-### Local state caveat
-
-`selected` is managed locally inside the hook. If the theme changes externally — via a
-system appearance change — the context `name` updates but `selected` does not. Use `name`
-for display and `selected` only for the highlight state.
-
-### With external stores
-
-When persisting to Zustand, Redux, or MMKV, call `select()` and the store setter together
-in `onPress`. Don't use a reactive bridge that calls `setTheme` on every store change —
-it races with `select()`'s deferred timing and reverts the pill.
+**Don't** compare picker rows against `theme.name`.
 
 ```tsx
-onPress={() => {
-  select(mode);       // visual transition
-  setColorMode(mode); // persistence
-}}
+// Wrong. theme.name is always concrete; the 'system' row never lights up.
+options.map((option) => (
+  <Pressable style={{ opacity: theme.name === option ? 1 : 0.5 }} />
+))
 ```
 
-See [State Managers](/docs/recipes/zustand) for the full pattern including hydration.
+**Do** compare them against `preference`.
+
+```tsx
+// Right. preference can be 'system'.
+options.map((option) => (
+  <Pressable style={{ opacity: preference === option ? 1 : 0.5 }} />
+))
+```
+
+**Don't** toggle dark to light against `preference`.
+
+```tsx
+// Wrong. When the user is in system mode, preference === 'system'
+// and this branch sends them to 'light' even if the OS is currently dark.
+setTheme(preference === 'dark' ? 'light' : 'dark')
+```
+
+**Do** toggle against `theme.name`.
+
+```tsx
+// Right. theme.name tracks what's painted, even in system mode.
+setTheme(theme.name === 'dark' ? 'light' : 'dark')
+```
+
+## Example
+
+```tsx title="components/Card.tsx"
+import { Pressable, Text, View } from 'react-native'
+import { useTheme } from '@/lib/theme'
+
+export function Card() {
+  const { theme, preference, setTheme, isTransitioning } = useTheme()
+
+  return (
+    <View style={{ backgroundColor: theme.colors.background, padding: 16 }}>
+      <Text style={{ color: theme.colors.text }}>
+        Painted: {theme.name}
+      </Text>
+      <Text style={{ color: theme.colors.textSecondary }}>
+        Preference: {preference}
+      </Text>
+      <Pressable
+        disabled={isTransitioning}
+        onPress={() => setTheme(theme.name === 'dark' ? 'light' : 'dark')}
+      >
+        <Text style={{ color: theme.colors.primary }}>Toggle</Text>
+      </Pressable>
+    </View>
+  )
+}
+```
+
+## `setTheme`
+
+```ts
+setTheme(name, options?): 'accepted' | 'ignored'
+```
+
+Changes the user's preference. The new preference is reflected
+synchronously in subsequent reads of `preference`, so picker UIs
+that highlight against it can repaint before the snapshot is
+captured.
+
+### Arguments
+
+| Name | Type | Description |
+|---|---|---|
+| `name` | `Names \| 'system'` | Concrete theme name, or `'system'` to follow the OS appearance. |
+| `options` | `SetThemeOptions` | Optional per-call configuration. See [SetThemeOptions](/docs/types#setthemeoptions) for every variant and field. |
+
+### Returns
+
+| Value | Meaning |
+|---|---|
+| `'accepted'` | The library will apply the change, instantly or via an animated transition. |
+| `'ignored'` | A transition is already in flight, or the call targets the same preference that's already active. |
+
+Most callers can discard the return value. `isTransitioning` and the
+configured callbacks cover the common cases. The discriminated
+string is there for telemetry callers who want to know explicitly
+whether a call did anything.
+
+### Common Options
+
+```ts
+// Default fade.
+setTheme('dark')
+
+// Circular reveal from a button ref.
+setTheme('dark', { transition: 'circularReveal', origin: buttonRef })
+
+// Wipe right (new theme enters from the left edge).
+setTheme('dark', { transition: 'wipe', direction: 'right', duration: 500 })
+
+// Split closing inward like shutters.
+setTheme('dark', { transition: 'split', mode: 'top-bottom', inverted: true })
+
+// Pixelize with a chunkier mosaic at the peak.
+setTheme('dark', { transition: 'pixelize', blockSize: 40 })
+
+// Instant switch (no snapshot, no overlay).
+setTheme('dark', { animated: false })
+```
+
+## `isTransitioning`
+
+`true` from just after the snapshot is captured until the animation
+completes. Use it to disable interactive controls so a second call
+can't be queued mid-transition.
+
+```tsx
+<Pressable disabled={isTransitioning} onPress={() => setTheme('dark')}>
+  <Text>Dark</Text>
+</Pressable>
+```
+
+<Callout type="info">
+  Touch input is also blocked internally from the moment `setTheme`
+  is called, even before `isTransitioning` flips, since the snapshot
+  hasn't been captured yet. The flag is there for visual feedback
+  like `disabled={isTransitioning}`. The library protects you from
+  the race.
+</Callout>
+
+## Picker Pattern
+
+`preference` updates synchronously inside `setTheme`, so pickers can
+highlight against it directly. No local `picked` state is needed.
+The engine waits one frame before capturing the snapshot, which
+gives React time to commit and paint the new highlight.
+
+```tsx
+import { Pressable, Text, View } from 'react-native'
+import { useTheme } from '@/lib/theme'
+
+const OPTIONS = ['light', 'dark', 'system'] as const
+
+export function ThemePicker() {
+  const { theme, preference, setTheme, isTransitioning } = useTheme()
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {OPTIONS.map((option) => (
+        <Pressable
+          key={option}
+          disabled={isTransitioning}
+          onPress={() => setTheme(option)}
+          style={{
+            backgroundColor:
+              preference === option ? theme.colors.primary : theme.colors.surface,
+          }}
+        >
+          <Text style={{ color: theme.colors.text }}>{option}</Text>
+        </Pressable>
+      ))}
+    </View>
+  )
+}
+```
+
+See [Theme Picker](/docs/examples/theme-picker) for the
+persisted-state variation.
+
+## Runtime Errors
+
+`setTheme` validates its numeric options at every call and throws a
+descriptive `Error` if any value is out of range. The check runs
+before the same-theme and in-flight guards, so misuse fails fast at
+the call site instead of producing a silently broken animation.
+
+| Error | Cause |
+|---|---|
+| `` `duration` must be a non-negative finite number `` | `duration` is negative, `NaN`, or `Infinity`. |
+| `` `blockSize` must be a finite number >= 2 `` | `blockSize` is below `2`, `NaN`, or `Infinity`. |
+| `` `noiseSize` must be a finite number >= 1 `` | `noiseSize` is below `1`, `NaN`, or `Infinity`. |
+| `` `origin` coordinates must be finite numbers `` | An explicit `origin` point has a `NaN` or `Infinity` coordinate. (Refs are validated at measurement time and fall back to the screen center if measurement fails.) |
+
+These validations are intentionally strict because the affected
+values feed shaders and geometry math where silent `NaN` propagation
+produces empty or visually broken transitions instead of a useful
+crash.
+
+## Behavior Rules
+
+1. **Same preference.** Returns `'ignored'`.
+2. **Already transitioning.** Returns `'ignored'`. Wait for `isTransitioning` to become `false` before retrying.
+3. **`'system'`.** Enters system-following mode and subscribes to OS changes. `preference` becomes `'system'`, while `theme.name` holds the OS-resolved concrete theme.
+4. **Concrete name.** Exits system-following mode.
+5. **`animated: false`.** Instant switch. Only `onThemeChange` fires.
+6. **Snapshot capture failure.** Falls back to an instant switch. `onThemeChange` still fires, but `onTransitionEnd` does not.
+
+## See Also
+
+- [createThemeTransition](/docs/api/create-theme-transition). The factory that produces the hook.
+- [SetThemeOptions](/docs/types#setthemeoptions). Every variant and field.
+- [How transitions work](/docs/guides/how-it-works). Capture, swap, animate.
+- [Callbacks](/docs/guides/callbacks). When each callback fires.

@@ -28,7 +28,7 @@ npm run build
 
 > **Note:** `npm link` does not work with Metro (it doesn't follow symlinks). Use one of these approaches instead:
 
-**Option A — Local path (simplest):**
+**Option A: Local path (simplest).**
 
 In your test project's `package.json`:
 
@@ -42,16 +42,16 @@ In your test project's `package.json`:
 
 Then run `npm install` and restart Metro with cache cleared: `npx expo start -c`.
 
-**Option B — yalc (recommended for frequent iteration):**
+**Option B: yalc (recommended for frequent iteration).**
 
 ```bash
 # Install yalc globally
 npm i -g yalc
 
-# In this repo — publish locally
+# In this repo: publish locally
 yalc publish
 
-# In your test project — add local version
+# In your test project: add local version
 yalc add react-native-theme-transition
 npx expo start -c
 ```
@@ -61,7 +61,7 @@ After making changes, run `yalc push` to update all linked projects automaticall
 ## Pull requests
 
 - Open an issue first to discuss non-trivial changes
-- Keep PRs focused — one feature or fix per PR
+- Keep PRs focused. One feature or fix per PR.
 - Ensure TypeScript compiles without errors (`npm run build`)
 - Test on both iOS and Android when possible
 - Fill out the PR template

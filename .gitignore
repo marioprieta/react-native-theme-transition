@@ -3,3 +3,10 @@ node_modules/
 *.tgz
 .cocoindex_code/
 CLAUDE.md
+
+# Build / tooling caches
+docs/tsconfig.tsbuildinfo
+
+# Internal planning / brainstorming artifacts (not shipped)
+superpowers/
+docs/superpowers/

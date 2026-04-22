@@ -1,80 +1,88 @@
 ---
-title: Callback Ordering
-description: Exact sequence of callbacks for animated transitions, instant switches, and edge cases.
+title: Callbacks
+description: When each lifecycle callback fires for animated, instant, system-driven, and failed transitions.
 ---
 
-## Animated transition
+The library exposes three callbacks. The split is intentional.
+`onTransitionStart` and `onTransitionEnd` are for animation
+lifecycle; `onThemeChange` is for "the theme is now X". Use
+`onThemeChange` as the single source of truth for persistence and
+analytics; it is the only one guaranteed to fire on every code path.
 
-```
-1.  Touch blocking starts (shared value, instant)
-2.  Config onTransitionStart(name)
-3.  Per-call onTransitionStart(name)
-4.  Screenshot captured
-5.  Overlay mounted
-6.  Image onLoad (bitmap decoded)
-7.  Overlay paints (1 frame)
-8.  Colors switched underneath
-9.  React commits new theme (1 frame)
-10. Fade animation starts (duration ms)
-11. Transition guards reset, touch unblocked
-12. Config onTransitionEnd(name)
-13. Per-call onTransitionEnd(name)
-14. Config onThemeChange(name)
-15. Next render: isTransitioning → false, overlay unmounted
-```
+## Animated Transition
 
-## Instant switch (`animated: false`)
-
-```
-1. Colors switched immediately
-2. Config onThemeChange(name)
+```text
+1. setTheme('dark') runs; touches are blocked
+2. config.onTransitionStart(name)      ← first
+3. options.onTransitionStart(name)     ← per-call, after config
+4. snapshot captured, overlay mounted
+5. colors swapped under the overlay
+6. animation runs (duration ms)
+7. animation ends (setTimeout matched to duration)
+8. config.onTransitionEnd(name)        ← first
+9. options.onTransitionEnd(name)       ← per-call, after config
+10. config.onThemeChange(name)         ← always last
+11. next render: isTransitioning → false
 ```
 
-No `onTransitionStart`, no `onTransitionEnd`, no touch blocking, no screenshot.
+## Instant Switch
 
-## Capture failure during animated transition
-
+```ts
+setTheme('dark', { animated: false })
 ```
-1. Touch blocking starts              ← already active
-2. Config onTransitionStart(name)     ← already fired
-3. Per-call onTransitionStart(name)   ← already fired
-4. Screenshot FAILS
-5. Colors switched immediately (fallback)
-6. Touch blocking ends
-7. Config onThemeChange(name)
+
+```text
+1. colors swap immediately
+2. config.onThemeChange(name)
+```
+
+No start, no end, no touch blocking, no snapshot. Only
+`onThemeChange` fires.
+
+## System-Driven Change
+
+OS appearance changes go through the same paths as user-initiated
+calls.
+
+- **Foreground.** Full animated transition.
+- **Background or returning to foreground.** Instant switch.
+
+`onThemeChange` fires in both cases. `onTransitionStart` and
+`onTransitionEnd` only fire for the foreground (animated) path.
+
+## Capture Failure Fallback
+
+If the Skia snapshot fails (out of memory, unmounted view, GPU
+hiccup), the library falls back to an instant switch. But
+`onTransitionStart` has already fired by then.
+
+```text
+1. config.onTransitionStart(name)      ← already fired
+2. snapshot FAILS
+3. colors swap immediately
+4. config.onThemeChange(name)
 ```
 
 <Callout type="warn">
-  `onTransitionEnd` does **not** fire on capture failure. Design `onTransitionStart`
-  handlers to be resilient to a missing matching `onTransitionEnd`.
+  `onTransitionEnd` does **not** fire on capture failure. Write
+  your `onTransitionStart` handlers so they are safe to run without
+  a matching end. Release any haptic engine references, clear any
+  state, and rely on `onThemeChange` for "the change is committed"
+  side effects.
 </Callout>
-
-### Detecting capture failures
-
-If `onTransitionStart` fires but `onTransitionEnd` does not within `duration + 100ms`,
-the capture failed. Design `onTransitionStart` handlers to be idempotent (safe to run
-without a matching `onTransitionEnd`). Use `onThemeChange` as the only guaranteed
-callback for tracking all theme changes.
-
-## System-driven change
-
-OS appearance changes use the same paths above:
-
-- **In foreground**: animated transition (full sequence)
-- **In background or returning to foreground**: instant switch (`animated: false`)
 
 ## Summary
 
-| Callback | Animated | Instant | Capture failure |
-|---|:---:|:---:|:---:|
-| `onTransitionStart` (config) | Yes | No | Yes (already fired) |
-| `onTransitionStart` (per-call) | Yes | No | Yes (already fired) |
-| `onTransitionEnd` (config) | Yes | No | **No** |
-| `onTransitionEnd` (per-call) | Yes | No | **No** |
-| `onThemeChange` (config) | Yes | Yes | Yes |
+| Callback | Animated | Instant | System foreground | System background | Capture failure |
+|---|:---:|:---:|:---:|:---:|:---:|
+| `config.onTransitionStart` | ✅ | ❌ | ✅ | ❌ | ✅ (already fired) |
+| `options.onTransitionStart` | ✅ | ❌ | n/a | n/a | ✅ (already fired) |
+| `config.onTransitionEnd` | ✅ | ❌ | ✅ | ❌ | ❌ |
+| `options.onTransitionEnd` | ✅ | ❌ | n/a | n/a | ❌ |
+| `config.onThemeChange` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-<Callout type="info">
-  When the app returns to the foreground after a background appearance change, the library
-  re-reads the OS scheme and applies an instant correction if needed. This handles iOS's
-  behavior of deferring Appearance events during suspension. `onThemeChange` fires in all cases.
-</Callout>
+## See Also
+
+- [createThemeTransition](/docs/api/create-theme-transition#arguments). Config-level callbacks.
+- [SetThemeOptions](/docs/types#setthemeoptions). Per-call callbacks.
+- [How transitions work](/docs/guides/how-it-works). The capture, swap, animate model.

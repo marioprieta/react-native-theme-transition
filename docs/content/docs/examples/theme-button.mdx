@@ -1,54 +1,66 @@
 ---
 title: Theme Button
-description: Simple cycling button that uses setTheme directly — no selection tracking needed.
+description: A plain button that cycles themes on tap, with no selection tracking or optimistic state.
 ---
 
-A button that cycles through themes. Since the button's visual appearance doesn't change
-on theme switch (it just shows a static label), no selection tracking is needed.
+A button with a static label that cycles through themes on tap.
+Because the button's visuals don't depend on which theme is active,
+you can call `setTheme` directly. No optimistic state, no effects,
+no `preference` reads.
+
+## Example
 
 ```tsx
-import { Text, Pressable } from 'react-native';
-import { useTheme } from '@/lib/theme';
+import { Pressable, Text } from 'react-native'
+import { useTheme } from '@/lib/theme'
 
-const CYCLE = ['light', 'dark'] as const;
+const CYCLE = ['light', 'dark'] as const
 
 export function ThemeButton() {
-  const { colors, name, setTheme, isTransitioning } = useTheme();
-  const nextIndex = (CYCLE.indexOf(name as typeof CYCLE[number]) + 1) % CYCLE.length;
+  const { theme, setTheme, isTransitioning } = useTheme()
+
+  const currentIndex = CYCLE.findIndex((name) => name === theme.name)
+  const next = CYCLE[(Math.max(0, currentIndex) + 1) % CYCLE.length]
 
   return (
     <Pressable
-      onPress={() => setTheme(CYCLE[nextIndex])}
       disabled={isTransitioning}
+      onPress={() => setTheme(next)}
       style={{
         padding: 16,
         borderRadius: 12,
         alignItems: 'center',
-        backgroundColor: colors.primary,
+        backgroundColor: theme.colors.primary,
       }}
     >
       <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
         Switch theme
       </Text>
     </Pressable>
-  );
+  )
 }
 ```
 
 <Callout type="warn">
-  **Do not change styles based on `isTransitioning`** (e.g., `opacity: isTransitioning ? 0.5 : 1`).
-  The screenshot captures the current visual state — if the button is dimmed when the screenshot
-  is taken, the cross-fade will blend the dimmed state with the new theme, producing a visible flash.
+  Don't dim the button based on `isTransitioning` (e.g.
+  `opacity: isTransitioning ? 0.5 : 1`). The snapshot captures
+  whatever is on screen, and a dimmed button will cross-fade with its
+  own full-opacity version and produce a visible flash. Use
+  `disabled` for interaction blocking; leave the styling alone.
 </Callout>
 
-## When to use this pattern
+## When the Trigger Doesn't Reflect the Active Theme
 
-This is the only pattern where you can call `setTheme` directly. It works because:
+A plain "Switch theme" button, a programmatic call from an effect,
+or a deep link (anything that doesn't need to highlight the *current*
+option) can just call `setTheme` directly. No state, no effects.
 
-- The button's label is static ("Switch theme") — it doesn't change before the screenshot
-- There's no visual indicator (highlight, checkmark, thumb) that needs to be updated before the screenshot
+See [Theme Picker](/docs/examples/theme-picker) for the pattern when
+you need to highlight the user's current pick. That one reads
+`preference` from the hook.
 
-<Callout type="info">
-  If you add a visual indicator to the button (e.g., a colored border on the active theme),
-  switch to `useTheme({})` and use `select()` instead.
-</Callout>
+## See Also
+
+- [Theme Toggle](/docs/examples/theme-toggle). Binary dark/light switch.
+- [Theme Picker](/docs/examples/theme-picker). Segmented control with `preference` highlight.
+- [useTheme](/docs/api/use-theme). The hook reference.

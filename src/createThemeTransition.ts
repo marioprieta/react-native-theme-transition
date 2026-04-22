@@ -1,38 +1,29 @@
 /**
- * Factory that wires the theme transition provider, context, and hooks.
- *
- * @remarks
- * Validates theme configuration at initialization: ensures at least one theme
- * exists and that all themes share identical token keys.
- * Returns a self-contained API ({@link ThemeTransitionAPI}) with no singletons,
- * so multiple theme scopes can coexist in the same app.
+ * Factory entry point for the theme transition system.
  *
  * @module
  */
 
+import { use } from 'react'
 import { TAG } from './constants'
-import { createUseTheme } from './hooks/useTheme'
 import { createProviderAndContext } from './transitionEngine'
+import { TRANSITION_TYPES } from './transitionMeta'
 import type {
   ThemeDefinition,
   ThemeNames,
   ThemeTransitionAPI,
   ThemeTransitionConfig,
+  TokenNames,
+  UseThemeResult,
 } from './types'
 
 /**
- * Creates a fully typed theme transition system.
+ * Builds a fully typed theme transition system from a map of themes.
  *
- * @typeParam T - Your application's theme map, keyed by theme name.
- * @param config - Theme configuration including available themes and defaults.
- * @returns A provider component and hooks scoped to the supplied themes.
- *
- * @example
- * ```tsx
- * const { ThemeTransitionProvider, useTheme } = createThemeTransition({
- *   themes: { light: { bg: '#fff' }, dark: { bg: '#000' } },
- * });
- * ```
+ * @param config - Theme configuration.
+ * @returns A {@link ThemeTransitionAPI} bound to the supplied themes.
+ * @throws Error on invalid configuration.
+ * @see https://react-native-theme-transition.vercel.app/docs/api/create-theme-transition
  */
 export function createThemeTransition<T extends Record<string, ThemeDefinition>>(
   config: ThemeTransitionConfig<T>,
@@ -43,9 +34,9 @@ export function createThemeTransition<T extends Record<string, ThemeDefinition>>
     throw new Error(`${TAG} \`themes\` must contain at least one theme.`)
   }
 
-  if ('system' in config.themes) {
+  if (Object.hasOwn(config.themes, 'system')) {
     throw new Error(
-      `${TAG} \`"system"\` is a reserved name and cannot be used as a theme key. Rename the theme and use \`systemThemeMap\` to map OS appearance to it.`,
+      `${TAG} \`"system"\` is a reserved name and cannot be used as a theme key.\n  Hint: rename the theme and use \`systemThemeMap\` to map OS appearance to it.`,
     )
   }
 
@@ -56,38 +47,65 @@ export function createThemeTransition<T extends Record<string, ThemeDefinition>>
     const keys = Object.keys(config.themes[name]).sort()
     if (keys.length !== referenceKeys.length || keys.some((k, i) => k !== referenceKeys[i])) {
       throw new Error(
-        `${TAG} Theme "${name}" has different token keys than "${referenceTheme}". All themes must share identical keys.`,
+        `${TAG} Theme "${name}" has different token keys than "${referenceTheme}".\n  Hint: every theme must share identical token keys.`,
       )
     }
   }
 
-  if (
-    config.duration != null &&
-    (typeof config.duration !== 'number' ||
-      !Number.isFinite(config.duration) ||
-      config.duration < 0)
-  ) {
-    throw new Error(`${TAG} \`duration\` must be a finite non-negative number.`)
+  if (config.transition != null && !TRANSITION_TYPES.includes(config.transition)) {
+    throw new Error(
+      `${TAG} \`transition\` must be one of: ${TRANSITION_TYPES.join(', ')}. Got "${config.transition}".`,
+    )
+  }
+
+  const assertThemeExists = (name: string, source: string, hint: string) => {
+    if (!Object.hasOwn(config.themes, name)) {
+      throw new Error(
+        `${TAG} ${source} refers to "${name}" which does not exist in themes.\n  Hint: ${hint}`,
+      )
+    }
   }
 
   if (config.systemThemeMap) {
-    if (!('light' in config.systemThemeMap) || !('dark' in config.systemThemeMap)) {
+    if (
+      !Object.hasOwn(config.systemThemeMap, 'light') ||
+      !Object.hasOwn(config.systemThemeMap, 'dark')
+    ) {
       throw new Error(`${TAG} \`systemThemeMap\` must provide both \`light\` and \`dark\` keys.`)
     }
-
     for (const [scheme, name] of Object.entries(config.systemThemeMap)) {
-      if (!(name in config.themes)) {
-        throw new Error(
-          `${TAG} \`systemThemeMap.${scheme}\` maps to "${name}" which does not exist in themes.`,
-        )
-      }
+      assertThemeExists(
+        name,
+        `\`systemThemeMap.${scheme}\``,
+        'the value must match a key in `themes`.',
+      )
+    }
+  }
+
+  if (config.darkThemes) {
+    if (config.darkThemes.length === 0) {
+      throw new Error(
+        `${TAG} \`darkThemes\` cannot be an empty array.\n  Hint: omit the field to use the default (\`['dark']\` or \`[systemThemeMap.dark]\`), or list at least one theme name.`,
+      )
+    }
+    for (const name of config.darkThemes) {
+      assertThemeExists(
+        name,
+        '`darkThemes`',
+        'every entry in `darkThemes` must match a key in `themes`.',
+      )
     }
   }
 
   const { Context, ThemeTransitionProvider } = createProviderAndContext(config)
 
-  return {
-    ThemeTransitionProvider,
-    useTheme: createUseTheme<T>(Context),
+  function useTheme(): UseThemeResult<TokenNames<T>, ThemeNames<T>> {
+    const ctx = use(Context)
+    if (!ctx) {
+      throw new Error(`${TAG} \`useTheme\` must be used inside a \`ThemeTransitionProvider\`.`)
+    }
+    return ctx
   }
+
+  return { ThemeTransitionProvider, useTheme }
 }

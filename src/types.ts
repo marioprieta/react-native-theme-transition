@@ -1,300 +1,379 @@
+import type { View } from 'react-native'
+import type { TransitionType } from './transitionMeta'
+
 /**
- * Map of theme token names to color values.
+ * Supported transition names.
  *
- * @remarks
- * Each theme is a flat record where keys are token names (e.g. `"background"`,
- * `"textPrimary"`) and values are color strings accepted by React Native
- * (hex, rgb, rgba, named colors).
+ * @see https://react-native-theme-transition.vercel.app/docs/types#transitiontype
+ */
+export type { TransitionType }
+
+/**
+ * A flat record of theme tokens. Keys are token names, values are
+ * React Native color strings. Every theme in a configuration must
+ * declare the same set of keys.
+ *
+ * @see https://react-native-theme-transition.vercel.app/docs/types#themedefinition
  */
 export type ThemeDefinition = Record<string, string>
 
 /**
- * Union of theme names available in a theme configuration.
+ * Explicit origin point for a reveal transition, in React Native
+ * density-independent points relative to the provider's root view.
+ * Both `x` and `y` must be finite numbers; the engine throws on `NaN`
+ * or `Infinity` to prevent silent geometry corruption inside the
+ * overlay's bounding-radius math.
  *
- * @typeParam T - Your application's theme map, keyed by theme name.
+ * @see https://react-native-theme-transition.vercel.app/docs/types#transitionorigin
  */
+export interface TransitionOrigin {
+  /** Horizontal offset from the left edge of the provider, in points. Must be finite. */
+  x: number
+  /** Vertical offset from the top edge of the provider, in points. Must be finite. */
+  y: number
+}
+
+/**
+ * Origin for a reveal transition. Either an explicit
+ * {@link TransitionOrigin} or a React ref whose center is measured
+ * just before the animation starts. A ref that has unmounted or
+ * returns no coordinates falls back to the center of the screen.
+ *
+ * @see https://react-native-theme-transition.vercel.app/docs/types#originspec
+ */
+export type OriginSpec = TransitionOrigin | React.RefObject<View | null>
+
+/** Union of the theme names declared in `T`. */
 export type ThemeNames<T extends Record<string, ThemeDefinition>> = keyof T & string
 
-/**
- * Union of token names shared across all themes in a configuration.
- *
- * @typeParam T - Your application's theme map, keyed by theme name.
- */
+/** Union of the token names shared across every theme in `T`. */
 export type TokenNames<T extends Record<string, ThemeDefinition>> = keyof T[ThemeNames<T>] & string
 
+/** Binary OS color scheme. Never `'unspecified'`. */
+export type ColorScheme = 'light' | 'dark'
+
 /**
- * Maps OS color schemes (`'light'` / `'dark'`) to theme names.
+ * Maps OS color schemes to theme names. Required when your themes are
+ * not literally named `'light'` and `'dark'` and you want to use
+ * `initialTheme="system"` or `setTheme('system')`.
  *
- * @remarks
- * Required when your themes are not named `'light'` and `'dark'`.
- * Both keys must be provided.
- *
- * @typeParam Names - Union of theme name strings.
+ * @see https://react-native-theme-transition.vercel.app/docs/types#systemthememap
  */
-export type SystemThemeMap<Names extends string> = Record<'light' | 'dark', Names>
+export type SystemThemeMap<Names extends string> = Record<ColorScheme, Names>
 
 /**
  * Configuration for {@link createThemeTransition}.
  *
- * @typeParam T - Your application's theme map, keyed by theme name.
+ * @see https://react-native-theme-transition.vercel.app/docs/api/create-theme-transition
  */
 export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>> {
   /**
-   * All available themes keyed by name.
-   *
-   * @remarks
-   * Every theme must share the exact same token keys. Mismatched keys
-   * cause a runtime error at initialization.
-   * The name `'system'` is reserved and cannot be used as a theme name.
+   * All available themes keyed by name. Every theme must share the
+   * same token keys; mismatches throw at initialization. The name
+   * `'system'` is reserved.
    */
   themes: T
 
   /**
-   * Cross-fade duration in milliseconds.
-   * @default 350
-   */
-  duration?: number
-
-  /**
-   * Maps OS appearance (`'light'` / `'dark'`) to theme names.
-   *
-   * @remarks
-   * Required when your themes are not named `'light'` and `'dark'`
-   * and you want to use `initialTheme="system"` or `setTheme('system')`.
-   * Both `light` and `dark` must be provided.
-   */
-  systemThemeMap?: SystemThemeMap<ThemeNames<T>>
-
-  /**
-   * Theme names that use a dark color scheme.
-   *
-   * @remarks
-   * The library automatically calls `Appearance.setColorScheme` to keep
-   * native UI elements (alerts, date pickers, keyboards) in sync with
-   * the active theme. Themes listed here get `'dark'`; all others get `'light'`.
-   * In system mode, `'unspecified'` is used so the OS drives the appearance.
-   *
-   * **Do not call `Appearance.setColorScheme` yourself** — the library manages
-   * it internally. Calling it manually can corrupt state on Android.
-   *
-   * @default `[systemThemeMap.dark]` if `systemThemeMap` is provided, otherwise `['dark']`.
-   */
-  darkThemes?: ThemeNames<T>[]
-
-  /**
-   * Called when an animated transition begins, before the screenshot capture.
-   *
-   * @remarks
-   * Fires for all animated transitions, including system-driven ones.
-   * Does not fire for instant switches (`animated: false`).
-   *
-   * @param themeName - The target theme name.
-   */
-  onTransitionStart?: (themeName: ThemeNames<T>) => void
-
-  /**
-   * Called after an animated transition completes and the overlay is removed.
-   *
-   * @remarks
-   * Fires for all animated transitions, including system-driven ones.
-   * Does not fire for instant switches (`animated: false`).
-   *
-   * Not called if the screenshot capture fails mid-transition, even when
-   * `onTransitionStart` has already fired. In that case the library falls back to an
-   * instant switch and only `onThemeChange` fires. Design `onTransitionStart` handlers
-   * to be resilient to a missing matching `onTransitionEnd`.
-   *
-   * @param themeName - The newly active theme name.
-   */
-  onTransitionEnd?: (themeName: ThemeNames<T>) => void
-
-  /**
-   * Called whenever the active theme changes.
-   *
-   * @remarks
-   * Fires for all theme changes: animated transitions, instant switches,
-   * and system-driven appearance changes. For animated transitions,
-   * fires after `onTransitionEnd`.
-   *
-   * @param themeName - The newly active theme name.
-   */
-  onThemeChange?: (themeName: ThemeNames<T>) => void
-}
-
-/**
- * Options for {@link ThemeTransitionAPI.useTheme | setTheme}.
- *
- * @typeParam Names - Union of theme name strings.
- */
-export interface SetThemeOptions<Names extends string = string> {
-  /**
-   * Whether to use the screenshot-overlay cross-fade animation.
-   *
-   * @remarks
-   * When `false`, the theme switches instantly without capturing a screenshot
-   * or showing an overlay.
+   * Whether theme changes animate by default. When `false`, every
+   * `setTheme` call switches instantly unless the caller passes
+   * `{ animated: true }`.
    *
    * @default true
    */
   animated?: boolean
 
   /**
-   * Called when the animated transition begins, before the screenshot capture.
+   * Default transition kind. Override per call via
+   * `setTheme(name, { transition })`.
    *
-   * @remarks
-   * Only called when `animated` is `true` (the default).
-   * Fires after the config-level `onTransitionStart` (if provided).
+   * @default 'fade'
+   */
+  transition?: TransitionType
+
+  /**
+   * Maps OS appearance to your theme names. Required when your themes
+   * are not named `'light'` and `'dark'` and you want to use
+   * `'system'` mode. Complements
+   * {@link ThemeTransitionConfig.darkThemes}.
+   */
+  systemThemeMap?: SystemThemeMap<ThemeNames<T>>
+
+  /**
+   * Theme names that should register as a dark color scheme with the
+   * OS via `Appearance.setColorScheme`. Only needed with two or more
+   * dark themes; otherwise derived from
+   * {@link ThemeTransitionConfig.systemThemeMap} (or `['dark']` if
+   * neither is provided). Must contain at least one entry when
+   * supplied; the engine throws on an empty array. Omit the field to
+   * fall back to the default.
    *
-   * @param themeName - The target theme name.
+   * @see https://react-native-theme-transition.vercel.app/docs/api/create-theme-transition#darkthemes
+   * @throws Error if supplied as an empty array, or if any entry is not a known theme name.
+   */
+  darkThemes?: ThemeNames<T>[]
+
+  /**
+   * Fires when an animated transition begins, before snapshot capture.
+   *
+   * @param themeName - Theme becoming active.
+   * @see https://react-native-theme-transition.vercel.app/docs/guides/callbacks
+   */
+  onTransitionStart?: (themeName: ThemeNames<T>) => void
+
+  /**
+   * Fires after an animated transition completes and the overlay is
+   * removed.
+   *
+   * @param themeName - Theme that is now active.
+   * @see https://react-native-theme-transition.vercel.app/docs/guides/callbacks
+   */
+  onTransitionEnd?: (themeName: ThemeNames<T>) => void
+
+  /**
+   * Fires whenever the active theme changes, regardless of path. The
+   * only callback guaranteed to fire on every code path. In `'system'`
+   * mode it can fire twice for a single `setTheme` call if the OS
+   * appearance changes while the transition is still in flight.
+   *
+   * @param themeName - Theme that is now active.
+   * @see https://react-native-theme-transition.vercel.app/docs/guides/callbacks
+   */
+  onThemeChange?: (themeName: ThemeNames<T>) => void
+}
+
+/** Common fields shared by every variant in {@link SetThemeOptions}. */
+interface BaseSetThemeOptions<Names extends string> {
+  /**
+   * Whether to animate this specific change. `false` switches
+   * instantly, with no snapshot or overlay. When omitted, inherits
+   * {@link ThemeTransitionConfig.animated} (which itself defaults to
+   * `true`).
+   */
+  animated?: boolean
+
+  /**
+   * Duration in milliseconds. Overrides the per-transition default.
+   * Must be a non-negative finite number; the engine throws on `NaN`,
+   * `Infinity`, or negative values.
+   *
+   * @default 350 for `fade`, `circularReveal`, `wipe`, `slide`, `split`; 800 for `heart`, `star`; 750 for `pixelize`, `dissolve`
+   * @throws Error if not a non-negative finite number.
+   */
+  duration?: number
+
+  /**
+   * Easing function. Accepts any Reanimated `EasingFunction`, a
+   * worklet-safe `(t: number) => number`.
+   *
+   * @default Easing.out(Easing.cubic)
+   */
+  easing?: (t: number) => number
+
+  /**
+   * Per-call start callback. Fires after
+   * {@link ThemeTransitionConfig.onTransitionStart} and only when the
+   * change is animated.
+   *
+   * @param themeName - Theme becoming active.
    */
   onTransitionStart?: (themeName: Names) => void
 
   /**
-   * Called after the animated transition completes and the overlay is removed.
+   * Per-call end callback. Fires after
+   * {@link ThemeTransitionConfig.onTransitionEnd}. Skipped on
+   * capture-failure fallbacks.
    *
-   * @remarks
-   * Only called when `animated` is `true` (the default).
-   * Fires after the config-level `onTransitionEnd` (if provided).
-   *
-   * Not called if the screenshot capture fails mid-transition, even when
-   * `onTransitionStart` has already fired. In that case the library falls back to an
-   * instant switch and only `onThemeChange` fires.
-   *
-   * @param themeName - The newly active theme name.
+   * @param themeName - Theme that is now active.
    */
   onTransitionEnd?: (themeName: Names) => void
 }
 
 /**
- * Base return type of the {@link ThemeTransitionAPI.useTheme | useTheme} hook.
- *
- * @typeParam Tokens - Union of token name strings.
- * @typeParam Names - Union of theme name strings.
+ * Fade. The old snapshot's opacity drops to zero, revealing the new
+ * theme. Default transition; the `transition` field can be omitted.
  */
-export interface UseThemeResult<Tokens extends string, Names extends string> {
-  /** Current resolved color values for all tokens. */
-  colors: Record<Tokens, string>
-  /** Name of the currently active theme (resolved, never `'system'`). */
-  name: Names
-  /**
-   * Switch to a new theme or enter system mode.
-   *
-   * @param name - Target theme name or `'system'`.
-   * @param options - Optional transition configuration.
-   * @returns `true` if the theme change was accepted, `false` if rejected
-   *          (already transitioning or same theme).
-   */
-  setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => boolean
-  /** `true` while a cross-fade transition overlay is visible. */
-  isTransitioning: boolean
+interface FadeVariant {
+  transition?: 'fade'
 }
 
 /**
- * Selection state returned by {@link ThemeTransitionAPI.useTheme | useTheme}
- * when called with `{ initialSelection }`.
- *
- * @typeParam Names - Union of theme name strings.
+ * Reveal. A shape (circle, heart, star) grows from a point,
+ * uncovering the new theme.
  */
-export interface ThemeSelectionResult<Names extends string> {
-  /** The currently selected option (may be `'system'`). */
-  selected: Names | 'system'
+interface RevealVariant {
+  transition: 'circularReveal' | 'heart' | 'star'
   /**
-   * Select a theme with transition-safe timing.
-   *
-   * @remarks
-   * Updates the selection highlight immediately, then defers `setTheme`
-   * to the next animation frame so the selection is painted before
-   * the library captures the screenshot. Rapid presses during an
-   * ongoing transition are silently ignored.
-   *
-   * @param option - Theme name or `'system'`.
+   * Point or ref where the shape expands from (or shrinks into when
+   * `inverted`). Falls back to the center of the screen.
    */
-  select: (option: Names | 'system') => void
+  origin?: OriginSpec
+  /**
+   * Reverse the direction. The new theme fills the screen and the old
+   * theme shrinks inside the shape until it vanishes.
+   *
+   * @default false
+   */
+  inverted?: boolean
+}
+
+/**
+ * Wipe and slide. Directional reveal; `direction` names where the
+ * motion is heading. The new theme always enters from the opposite
+ * edge and moves toward `direction`.
+ */
+interface WipeVariant {
+  transition: 'wipe' | 'slide'
+  /**
+   * Cardinal direction the motion is heading.
+   *
+   * @default 'right'
+   */
+  direction?: 'left' | 'right' | 'up' | 'down'
+}
+
+/**
+ * Split. The screen splits in two and each half animates. With
+ * `inverted: false` the halves part outward from the centerline like
+ * curtains. With `inverted: true` they close inward from the edges
+ * like shutters.
+ */
+interface SplitVariant {
+  transition: 'split'
+  /**
+   * How the screen is divided. `'left-right'` splits vertically;
+   * `'top-bottom'` splits horizontally.
+   *
+   * @default 'left-right'
+   */
+  mode?: 'left-right' | 'top-bottom'
+  /**
+   * Reverse the animation. `false` parts outward from the center;
+   * `true` closes inward from the edges.
+   *
+   * @default false
+   */
+  inverted?: boolean
+}
+
+/**
+ * Pixelize. Both old and new snapshots crossfade through a shared
+ * pixel grid that peaks at the midpoint.
+ */
+interface PixelizeVariant {
+  transition: 'pixelize'
+  /**
+   * Maximum pixel block size in points at the animation's midpoint.
+   * Higher values give a chunkier mosaic. Must be a finite number
+   * `>= 2`; the engine throws on smaller, `NaN`, or `Infinity` values.
+   *
+   * @default 52
+   * @throws Error if not a finite number `>= 2`.
+   */
+  blockSize?: number
+}
+
+/**
+ * Dissolve. The old snapshot disintegrates via a noise threshold; as
+ * `progress` rises, more cells turn transparent until the new theme is
+ * fully visible.
+ */
+interface DissolveVariant {
+  transition: 'dissolve'
+  /**
+   * Noise cell size in points. Higher values give bigger, more
+   * visible specks; lower values give finer sand. Must be a finite
+   * number `>= 1`; the engine throws on smaller, `NaN`, or `Infinity`
+   * values.
+   *
+   * @default 5
+   * @throws Error if not a finite number `>= 1`.
+   */
+  noiseSize?: number
+}
+
+/**
+ * Options for {@link UseThemeResult.setTheme}. The `transition` field
+ * selects a variant and determines which extra fields are valid for
+ * that variant.
+ *
+ * @see https://react-native-theme-transition.vercel.app/docs/types#setthemeoptions
+ */
+export type SetThemeOptions<Names extends string = string> = BaseSetThemeOptions<Names> &
+  (FadeVariant | RevealVariant | WipeVariant | SplitVariant | PixelizeVariant | DissolveVariant)
+
+/**
+ * Return value of {@link ThemeTransitionAPI.useTheme}. Two orthogonal
+ * concepts: `theme` (what is currently painted, always concrete) and
+ * `preference` (what the user explicitly picked, can be `'system'`).
+ *
+ * @see https://react-native-theme-transition.vercel.app/docs/api/use-theme
+ */
+export interface UseThemeResult<Tokens extends string, Names extends string> {
+  /**
+   * The theme currently painted on screen. Always a concrete theme,
+   * never `'system'`.
+   */
+  theme: {
+    /** Name of the painted theme. Always concrete. */
+    name: Names
+    /** Resolved color tokens for the painted theme. */
+    colors: Record<Tokens, string>
+    /**
+     * Binary light or dark classification, derived from
+     * {@link ThemeTransitionConfig.darkThemes}.
+     */
+    scheme: ColorScheme
+  }
+
+  /**
+   * The theme the user explicitly picked. May be `'system'`. Mirrors
+   * the last argument passed to {@link UseThemeResult.setTheme}.
+   */
+  preference: Names | 'system'
+
+  /** `true` while a transition overlay is visible. */
+  isTransitioning: boolean
+
+  /**
+   * Change the user's {@link UseThemeResult.preference}.
+   *
+   * @param name - Concrete theme name, or `'system'` to follow the OS.
+   * @param options - Per-call transition configuration.
+   * @returns `'accepted'` if the change will apply, `'ignored'` if rejected (same preference or transition in flight).
+   * @see https://react-native-theme-transition.vercel.app/docs/api/use-theme#settheme
+   */
+  setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => 'accepted' | 'ignored'
 }
 
 /**
  * Public API returned by {@link createThemeTransition}.
  *
- * @typeParam T - Your application's theme map, keyed by theme name.
+ * @see https://react-native-theme-transition.vercel.app/docs/api/create-theme-transition
  */
 export interface ThemeTransitionAPI<T extends Record<string, ThemeDefinition>> {
   /**
    * Provider that supplies animated theme colors via context.
    *
-   * @remarks
-   * Place this as high as possible in the component tree (ideally wrapping
-   * navigation) so the screenshot can capture the entire screen.
+   * @see https://react-native-theme-transition.vercel.app/docs/api/provider
    */
-  ThemeTransitionProvider: React.FC<{
+  ThemeTransitionProvider: (props: {
+    /** Your app tree. */
     children: React.ReactNode
     /**
-     * Theme to render on the first frame.
-     *
-     * @remarks
-     * Pass `'system'` to read the OS appearance synchronously (zero-flash)
-     * and subscribe to changes. For custom theme names, provide
-     * {@link ThemeTransitionConfig.systemThemeMap | systemThemeMap} in the config.
+     * Theme to render on the first frame. Read once on mount, like
+     * the initializer of `useState`; later changes to this prop are
+     * ignored.
      */
     initialTheme: ThemeNames<T> | 'system'
-  }>
+  }) => React.ReactNode
 
   /**
-   * Hook returning the current theme state and transition controls.
+   * Hook that returns the {@link UseThemeResult} for the nearest
+   * provider.
    *
-   * @remarks
-   * **Without arguments** — returns theme colors, name, `setTheme`, and
-   * `isTransitioning`. Use this in any component that reads or changes the theme.
-   *
-   * **With `{ initialSelection }`** — also returns `selected` and `select` for
-   * building theme selection UIs (button groups, toggles, checkmark lists) with
-   * transition-safe timing. On iOS (especially 120Hz ProMotion), calling
-   * `setTheme` synchronously after a UI state update can cause the screenshot
-   * to capture the old state, producing visible flickering. The `select`
-   * function handles this automatically by deferring `setTheme` to the next
-   * animation frame.
-   *
-   * `initialSelection` sets the starting value of `selected` (read once, like
-   * `useState`). When omitted, defaults to the current theme name from context.
-   *
-   * @throws If called outside a `ThemeTransitionProvider`.
-   *
-   * @example
-   * ```tsx
-   * // Reading theme colors in any component
-   * const { colors, name } = useTheme();
-   * ```
-   *
-   * @example
-   * ```tsx
-   * // Building a theme selection UI
-   * function ThemePicker() {
-   *   const { selected, select, colors, isTransitioning } = useTheme({ initialSelection: 'system' });
-   *   return (
-   *     <View style={{ flexDirection: 'row', gap: 8 }}>
-   *       {(['system', 'light', 'dark'] as const).map((option) => (
-   *         <Pressable
-   *           key={option}
-   *           onPress={() => select(option)}
-   *           disabled={isTransitioning}
-   *           style={{ backgroundColor: option === selected ? colors.primary : 'transparent' }}
-   *         >
-   *           <Text>{option}</Text>
-   *         </Pressable>
-   *       ))}
-   *     </View>
-   *   );
-   * }
-   * ```
+   * @throws Error if called outside a `ThemeTransitionProvider`.
+   * @see https://react-native-theme-transition.vercel.app/docs/api/use-theme
    */
-  useTheme: {
-    /** Returns current theme state and controls. */
-    (): UseThemeResult<TokenNames<T>, ThemeNames<T>>
-    /**
-     * Returns theme state, controls, and selection tracking with transition-safe timing.
-     * @param options.initialSelection - Starting value for `selected`. Defaults to the current theme name.
-     */
-    (options: {
-      initialSelection?: ThemeNames<T> | 'system'
-    }): UseThemeResult<TokenNames<T>, ThemeNames<T>> & ThemeSelectionResult<ThemeNames<T>>
-  }
+  useTheme: () => UseThemeResult<TokenNames<T>, ThemeNames<T>>
 }

@@ -1,84 +1,116 @@
 ---
 title: Persisted Preference
-description: Save the user's theme choice to AsyncStorage and restore it on app start.
+description: Save the user's theme choice to AsyncStorage and restore it on app start without a double transition.
 ---
 
-Store the user's choice as `'light' | 'dark' | 'system'` and pass it to
-`initialTheme` on startup.
+The user's pick is exactly the value of `preference` from
+`useTheme()`: `'light'`, `'dark'`, or `'system'`. Write it to storage
+on every change, read it back on startup, and pass it to
+`initialTheme`. No bridge component, no reactive subscription.
 
 ## With AsyncStorage
 
 ```tsx title="app/_layout.tsx"
-import { useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ThemeTransitionProvider } from '@/lib/theme';
+import { useEffect, useState } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { ThemeTransitionProvider } from '@/lib/theme'
+
+type Pref = 'light' | 'dark' | 'system'
 
 export default function RootLayout() {
-  const [initial, setInitial] = useState<'light' | 'dark' | 'system' | null>(null);
+  const [initial, setInitial] = useState<Pref | null>(null)
 
   useEffect(() => {
     AsyncStorage.getItem('theme-preference').then((v) => {
-      const valid = ['light', 'dark', 'system'].includes(v ?? '')
-        ? (v as 'light' | 'dark' | 'system')
-        : 'system';
-      setInitial(valid);
-    });
-  }, []);
+      setInitial(['light', 'dark', 'system'].includes(v ?? '') ? (v as Pref) : 'system')
+    })
+  }, [])
 
-  if (!initial) return null; // or splash screen
+  if (!initial) return null // or your splash component
 
   return (
     <ThemeTransitionProvider initialTheme={initial}>
       <App />
     </ThemeTransitionProvider>
-  );
+  )
 }
 ```
 
-### Settings screen
+## Settings Screen
 
 ```tsx
-import { Button } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '@/lib/theme';
+import { View, Text, Pressable } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useTheme } from '@/lib/theme'
+
+const OPTIONS = ['light', 'dark', 'system'] as const
 
 function ThemeSettings() {
-  const { setTheme } = useTheme();
+  const { theme, preference, setTheme, isTransitioning } = useTheme()
 
-  const handleSelect = async (pref: 'light' | 'dark' | 'system') => {
-    setTheme(pref);
-    await AsyncStorage.setItem('theme-preference', pref);
-  };
+  const handleSelect = (pref: (typeof OPTIONS)[number]) => {
+    setTheme(pref)
+    AsyncStorage.setItem('theme-preference', pref)
+  }
 
   return (
-    <>
-      <Button title="Light"  onPress={() => handleSelect('light')} />
-      <Button title="Dark"   onPress={() => handleSelect('dark')} />
-      <Button title="System" onPress={() => handleSelect('system')} />
-    </>
-  );
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {OPTIONS.map((option) => (
+        <Pressable
+          key={option}
+          disabled={isTransitioning}
+          onPress={() => handleSelect(option)}
+          style={{
+            flex: 1,
+            padding: 12,
+            borderRadius: 8,
+            alignItems: 'center',
+            backgroundColor:
+              preference === option ? theme.colors.primary : 'transparent',
+          }}
+        >
+          <Text
+            style={{ color: preference === option ? '#fff' : theme.colors.text }}
+          >
+            {option}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  )
 }
 ```
 
-<Callout type="info">
-  This pattern calls `setTheme()` directly because the buttons have no visual selection
-  indicator. For pickers with pill highlights, checkmarks, or toggles, use `select()` from
-  `useTheme({ initialSelection })`. See [State Managers](/docs/recipes/zustand).
-</Callout>
+`preference` is the right field for persistence: it's the raw value
+the user picked (including `'system'`), updates synchronously inside
+`setTheme`, and stays in sync when the theme changes from anywhere
+else (OS appearance, programmatic call). Write it to storage, read
+it back on startup, and pass it directly to `initialTheme`.
 
-## Avoiding double transitions on startup
+## Avoiding the Double Transition on Startup
 
-If `initialTheme="system"` resolves to `'light'` but the stored preference is `'dark'`,
-the app starts light, then immediately transitions to dark.
-
-**Fix:** Pass the stored preference directly as `initialTheme`:
+If `initialTheme="system"` resolves to `'light'` but the stored
+preference is `'dark'`, the app starts light and then animates to
+dark, a visible flash on first launch. The fix is to read the
+stored preference **before** mounting the provider and pass it
+directly as `initialTheme`, so the very first frame is already on
+the correct theme.
 
 ```tsx
-<ThemeTransitionProvider initialTheme={storedPreference}>
+// ❌ Causes a double transition on launch
+<ThemeTransitionProvider initialTheme="system">
+  <BridgeThatCallsSetTheme />
+</ThemeTransitionProvider>
+
+// ✅ First frame on the correct theme
+const stored = await AsyncStorage.getItem('theme-preference')
+<ThemeTransitionProvider initialTheme={stored ?? 'system'}>
 ```
 
-<Callout type="info">
-  For Zustand, Redux, or MMKV with `select()`-based pickers, see
-  [State Managers](/docs/recipes/zustand) for the hydration-only bridge pattern
-  that avoids both double transitions and race conditions with selection tracking.
-</Callout>
+## See Also
+
+- [Troubleshooting: Double Transition on App Start](/docs/guides/troubleshooting#double-transition-on-app-start). The same pattern, diagnosed from the symptom side.
+- [State Managers](/docs/recipes/zustand). Bridge with Zustand, Redux, or MMKV.
+- [Theme Picker](/docs/examples/theme-picker). Segmented control built around `preference`.
+- [Checkmark List](/docs/examples/checkmark-list). iOS Settings-style list.
+- [useTheme](/docs/api/use-theme). The hook reference.
