@@ -148,6 +148,12 @@ export type TransitionType = keyof typeof TRANSITION_META
  * Runtime list of every supported transition name. Use this to build
  * pickers or validate user input without hardcoding the set.
  *
+ * @remarks
+ * The array is `readonly` and frozen. Mutating it (e.g. `.sort()`, `.push()`)
+ * would corrupt the config validator in {@link createThemeTransition}, which
+ * treats this list as the authoritative set. Copy it with
+ * `[...TRANSITION_TYPES]` if a mutable version is needed.
+ *
  * @example
  * ```ts
  * import { TRANSITION_TYPES } from 'react-native-theme-transition'
@@ -159,7 +165,9 @@ export type TransitionType = keyof typeof TRANSITION_META
  * ))
  * ```
  */
-export const TRANSITION_TYPES = Object.keys(TRANSITION_META) as TransitionType[]
+export const TRANSITION_TYPES: readonly TransitionType[] = Object.freeze(
+  Object.keys(TRANSITION_META) as TransitionType[],
+)
 
 /** @internal Direction for `wipe` and `slide` transitions. */
 export type WipeDirection = 'left' | 'right' | 'up' | 'down'

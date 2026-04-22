@@ -8,7 +8,19 @@
 import type { View } from 'react-native'
 import type { OriginSpec, TransitionOrigin } from '../types'
 
-/** Measures the center point of a View ref. Returns `null` if measurement fails. @internal */
+/**
+ * Measures the center point of a View ref. Returns `null` if the ref is
+ * unmounted or `measure` throws.
+ *
+ * @remarks
+ * `measure` invokes its callback asynchronously on Paper but synchronously on
+ * Fabric, because Fabric reaches the Shadow Tree without a bridge hop. v2's
+ * peer deps (`react-native >= 0.78.0`, `@shopify/react-native-skia >= 2.0.0`)
+ * both require Fabric, so the callback runs before `measure` returns and
+ * `result` is already set at the return site. Paper is not a supported target.
+ *
+ * @internal
+ */
 export function measureCenter(ref: React.RefObject<View | null>): TransitionOrigin | null {
   if (!ref.current) return null
   try {
