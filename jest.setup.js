@@ -1,4 +1,4 @@
-// Mock react-native core APIs used by transitionEngine.tsx
+// Mocks the `react-native` core APIs consumed by `src/transitionEngine.tsx`.
 jest.mock('react-native', () => ({
   Appearance: {
     getColorScheme: jest.fn(() => 'light'),
@@ -14,15 +14,33 @@ jest.mock('react-native', () => ({
   Image: 'Image',
 }))
 
-// Mock reanimated — only useSharedValue and withTiming are used in the state machine
-jest.mock('react-native-reanimated', () => ({
-  __esModule: true,
-  default: { View: 'Animated.View' },
-  useSharedValue: (initial) => ({ value: initial, set: jest.fn() }),
-  useDerivedValue: (fn) => ({ value: fn() }),
-  useAnimatedProps: (fn) => fn(),
-  withTiming: (_val, _config, cb) => cb,
-}))
+// Mocks every symbol imported from `react-native-reanimated` in the src tree.
+// The current suite only covers config validation and never mounts the
+// provider, so a partial mock would not fail it. Any test that renders
+// `ThemeTransitionProvider` destructures these symbols at module load, so a
+// missing export crashes before the first assertion runs. Keep this list in
+// sync with the imports in `src/transitionEngine.tsx` and
+// `src/overlay/SkiaOverlay.tsx`.
+jest.mock('react-native-reanimated', () => {
+  const noopEasing = () => 0
+  const curriedEasing = () => noopEasing
+  return {
+    __esModule: true,
+    default: { View: 'Animated.View' },
+    useSharedValue: (initial) => ({ value: initial, set: jest.fn() }),
+    useDerivedValue: (fn) => ({ value: fn() }),
+    useAnimatedProps: (fn) => fn(),
+    useAnimatedStyle: (fn) => fn(),
+    withTiming: (_val, _config, cb) => cb,
+    Easing: {
+      linear: noopEasing,
+      cubic: noopEasing,
+      in: curriedEasing,
+      out: curriedEasing,
+      inOut: curriedEasing,
+    },
+  }
+})
 
 jest.mock('@shopify/react-native-skia', () => {
   const mockPath = () => ({
@@ -63,9 +81,9 @@ jest.mock('react-native-worklets', () => ({
   scheduleOnRN: (fn) => fn(),
 }))
 
-// Mock react hooks that transitionEngine uses — we test through createThemeTransition
-// which calls createProviderAndContext (module-level), but the hooks are only invoked
-// at render time. Since we're testing config validation (no rendering), these are fine.
+// Re-exports the real React apart from pinning `createContext`. The engine's
+// hooks run only at render time, and the current suite tests config validation
+// at module load, so no hook mocks are needed.
 jest.mock('react', () => {
   const actual = jest.requireActual('react')
   return {

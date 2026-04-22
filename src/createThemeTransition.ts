@@ -34,7 +34,7 @@ export function createThemeTransition<T extends Record<string, ThemeDefinition>>
     throw new Error(`${TAG} \`themes\` must contain at least one theme.`)
   }
 
-  if ('system' in config.themes) {
+  if (Object.hasOwn(config.themes, 'system')) {
     throw new Error(
       `${TAG} \`"system"\` is a reserved name and cannot be used as a theme key.\n  Hint: rename the theme and use \`systemThemeMap\` to map OS appearance to it.`,
     )
@@ -59,7 +59,7 @@ export function createThemeTransition<T extends Record<string, ThemeDefinition>>
   }
 
   const assertThemeExists = (name: string, source: string, hint: string) => {
-    if (!(name in config.themes)) {
+    if (!Object.hasOwn(config.themes, name)) {
       throw new Error(
         `${TAG} ${source} refers to "${name}" which does not exist in themes.\n  Hint: ${hint}`,
       )
@@ -67,7 +67,10 @@ export function createThemeTransition<T extends Record<string, ThemeDefinition>>
   }
 
   if (config.systemThemeMap) {
-    if (!('light' in config.systemThemeMap) || !('dark' in config.systemThemeMap)) {
+    if (
+      !Object.hasOwn(config.systemThemeMap, 'light') ||
+      !Object.hasOwn(config.systemThemeMap, 'dark')
+    ) {
       throw new Error(`${TAG} \`systemThemeMap\` must provide both \`light\` and \`dark\` keys.`)
     }
     for (const [scheme, name] of Object.entries(config.systemThemeMap)) {
