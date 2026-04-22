@@ -13,13 +13,13 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/32cdd33a-2c79-42f6-b70a-4a4644100683" width="400" alt="React Native Theme Transition demo" />
+  <img src="https://raw.githubusercontent.com/marioprieta/react-native-theme-transition/main/assets/videos/raw.gif" width="400" alt="React Native Theme Transition demo" />
 </p>
 
 ## Features
 
 - **Nine transition styles.** `fade`, `circularReveal`, `heart`, `star`, `wipe`, `slide`, `split`, `pixelize`, `dissolve`.
-- **Expo Go ready.** Works on Expo SDK 54+ out of the box. Bare React Native CLI also supported.
+- **Expo Go ready.** Works on Expo SDK 55+ out of the box. Bare React Native CLI also supported.
 - **Full TypeScript inference.** `useTheme()` and `setTheme()` know your theme names and color tokens without manual generics.
 - **System theme built in.** Follows OS appearance with zero-flash startup.
 - **Strict runtime validation.** Invalid options throw immediately with clear error messages.
@@ -34,13 +34,13 @@
 
 ## Try it
 
-- [Snack](https://snack.expo.dev/@mariops03/react-native-theme-transition) Live playground with the 9 transitions in a browser phone preview.
+- [Snack](https://snack.expo.dev/@mariops03/react-native-theme-transition) Live playground with the 9 transitions. **Open it on iOS** — Snack's Android preview runs slowly and the animations don't render (this is a Snack limitation, not a library one; animations run fine on real Android devices and in release builds).
 - [Docs](https://react-native-theme-transition.vercel.app) API reference, recipes, migration guide.
 
 ## Installation
 
 ```bash
-# Expo (SDK 54+)
+# Expo (SDK 55+)
 npx expo install react-native-theme-transition @shopify/react-native-skia react-native-worklets
 
 # React Native CLI
