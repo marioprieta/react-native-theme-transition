@@ -158,7 +158,7 @@ four fields.
 | `theme.colors` | `Record<Tokens, string>` | Resolved color tokens for the painted theme. |
 | `theme.scheme` | `ColorScheme` | Binary classification, derived from `darkThemes`. |
 | `preference` | `Names \| 'system'` | The theme the user explicitly picked. |
-| `isTransitioning` | `boolean` | Transition overlay is visible. |
+| `isTransitioning` | `boolean` | `true` from the colour-swap commit through JS cleanup; excludes initial capture/setup. |
 | `setTheme` | `(name, opts?) => 'accepted' \| 'ignored'` | Change the preference. |
 
 The split is deliberate. `theme` is what's painted right now (use it

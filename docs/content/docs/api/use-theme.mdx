@@ -26,7 +26,7 @@ you defined in `themes`.
 | `theme.colors` | `Record<Token, string>` | Resolved color tokens for the painted theme. |
 | `theme.scheme` | `'light' \| 'dark'` | Binary classification, derived from `darkThemes`. |
 | `preference` | `Names \| 'system'` | What the user explicitly picked. Mirrors the last value passed to `setTheme`. |
-| `isTransitioning` | `boolean` | `true` while a transition overlay is visible. |
+| `isTransitioning` | `boolean` | `true` from the colour-swap commit through JS cleanup; excludes initial capture/setup. |
 | `setTheme` | `(name, opts?) => 'accepted' \| 'ignored'` | Change the user's preference. See [setTheme](#settheme) below. |
 
 ## Theme vs Preference

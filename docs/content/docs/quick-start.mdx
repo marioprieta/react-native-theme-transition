@@ -124,8 +124,9 @@ applies to React Native CLI projects; only the file paths change.
       be `'system'`. Use it for picker highlights and persistence.
     - **`setTheme`**. Change the preference. Accepts a concrete
       name or `'system'`.
-    - **`isTransitioning`**. `true` while the overlay animation is
-      running. Use it to disable interactive controls.
+    - **`isTransitioning`**. `true` from the colour-swap commit through
+      JS cleanup, excluding initial capture/setup. Use it to disable
+      controls visually; the engine blocks touches earlier.
 
     See [useTheme](/docs/api/use-theme#theme-vs-preference) for the
     full decision table.

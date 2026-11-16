@@ -38,7 +38,7 @@ const { ThemeTransitionProvider, useTheme } = createThemeTransition({
 | `darkThemes` | `Names[]` | `[systemThemeMap.dark]` or `['dark']` | Theme names that register as a dark color scheme with the OS. The library calls `Appearance.setColorScheme` internally to keep native UI in sync. |
 | `onTransitionStart` | `(name) => void` | — | Called when an animated transition begins, before snapshot capture. Skipped for instant switches. |
 | `onTransitionEnd` | `(name) => void` | — | Called after an animated transition completes. Skipped for instant switches and capture-failure fallbacks. |
-| `onThemeChange` | `(name) => void` | — | Called on every theme change: animated, instant, or system-driven. The only callback guaranteed to fire. |
+| `onThemeChange` | `(name) => void` | — | Called after applied animated, instant, system-driven, or capture-fallback changes. Excludes ignored calls and mode-only no-ops; see [callbacks](/docs/guides/callbacks). |
 
 <Callout type="info">
   `duration` is intentionally **not** a config field. Each transition

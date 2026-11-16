@@ -6,8 +6,10 @@ description: Animated theme transitions for React Native. Nine styles built on S
 `react-native-theme-transition` brings animated theme switching to
 React Native. It snapshots the current screen, swaps your theme
 underneath, and animates the snapshot away with one of nine styles.
-Built on Skia and Reanimated, both bundled in modern Expo SDKs (54+),
-so it works in Expo Go without a prebuild.
+Built on Skia and Reanimated, with no package-specific native module.
+Expo Go needs matching JavaScript and native peers; bundling those libraries
+alone does not prove compatibility. See [getting started](/docs/getting-started)
+for the tested SDK 58 baseline and older-runtime limitations.
 
 ## Highlights
 
