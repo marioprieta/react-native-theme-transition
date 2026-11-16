@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.3
+
+### Patch Changes
+
+- Correct the public demo links. The Expo SDK 55 Snack playground
+  (<https://snack.expo.dev/@mariops03/react-native-theme-transition>) is the only
+  public demo and runs on iOS and Android only; the documentation site remains at
+  <https://react-native-theme-transition.vercel.app>. The SDK 58 demo app
+  repository stays private and is no longer linked from the readmes or docs.
+
 ## 2.0.2
 
 ### Patch Changes

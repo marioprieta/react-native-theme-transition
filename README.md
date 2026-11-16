@@ -34,8 +34,7 @@
 
 ## Try it
 
-- [Demo app](https://github.com/marioprieta/theme-demo) Primary demo: an Expo SDK 58 app running `react-native-theme-transition` 2.0.2 on iOS and Android.
-- [Snack](https://snack.expo.dev/@mariops03/react-native-theme-transition) Separate public playground. It currently supports Expo SDK 55 at most, so check its dependency versions before comparing it with the SDK 58 validation baseline. The web preview is unsupported because the Skia `RuntimeEffect` overlays are native-only.
+- [Snack](https://snack.expo.dev/@mariops03/react-native-theme-transition) The public playground. It supports Expo SDK 55 at most and runs on the Snack mobile player (iOS and Android) only; check its dependency versions before comparing it with the SDK 58 validation baseline. The web preview is unsupported because the Skia `RuntimeEffect` overlays are native-only.
 - [Docs](https://react-native-theme-transition.vercel.app) API reference, recipes, migration guide.
 
 Using `expo-glass-effect`? Pass `colorScheme={theme.scheme}` to `GlassView` to keep its material color aligned during a fade. See the [Liquid Glass recipe](https://react-native-theme-transition.vercel.app/docs/recipes/glass-effect) for a reusable app component and the verified scope.
