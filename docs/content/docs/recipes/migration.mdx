@@ -57,7 +57,8 @@ The hook now returns four top-level fields:
 - `theme`. What's painted right now (`name`, `colors`, `scheme`). Always concrete.
 - `preference`. What the user picked. Can be `'system'`.
 - `setTheme`. Change the preference.
-- `isTransitioning`. `true` while the overlay animation runs.
+- `isTransitioning`. `true` from the colour-swap commit through JS cleanup;
+  excludes initial capture/setup.
 
 ```tsx
 // 1.x

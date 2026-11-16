@@ -61,9 +61,11 @@ The per-call callback fires **after** the config-level one. See
 
 ## Analytics
 
-`onThemeChange` is the only callback guaranteed to fire on every code
-path: animated, instant, system-driven, and capture-failure
-fallbacks. Use it as the single source of truth for tracking.
+Use `onThemeChange` to track applied animated, instant, system-driven,
+and capture-failure changes. It does not fire for ignored calls,
+mode-only no-ops, start-callback exceptions, or provider unmounts.
+It reports the applied theme, not screen presentation; see
+[Callbacks](/docs/guides/callbacks) for those distinctions.
 
 ```ts title="lib/theme.ts"
 export const { ThemeTransitionProvider, useTheme } = createThemeTransition({
