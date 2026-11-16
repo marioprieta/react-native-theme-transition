@@ -1,5 +1,5 @@
 import { createRef } from 'react'
-import type { View } from 'react-native'
+import type { ViewRef } from '../src/types'
 import { validateSetThemeOptions } from '../src/validateSetThemeOptions'
 
 describe('validateSetThemeOptions', () => {
@@ -96,7 +96,7 @@ describe('validateSetThemeOptions', () => {
     })
 
     it('skips validation when origin is a ref (handled at measurement time)', () => {
-      const ref = createRef<View>()
+      const ref = createRef<ViewRef>()
       expect(() => validateSetThemeOptions({ origin: ref })).not.toThrow()
     })
   })
@@ -106,7 +106,7 @@ describe('validateSetThemeOptions', () => {
   })
 
   it('does not throw when every option is valid', () => {
-    const ref = createRef<View>()
+    const ref = createRef<ViewRef>()
     expect(() =>
       validateSetThemeOptions({
         duration: 350,

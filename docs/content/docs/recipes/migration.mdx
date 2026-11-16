@@ -99,9 +99,8 @@ the return value.
 
 `useTheme({ initialSelection })`, `selected`, and `select()` are all
 removed. The hook now exposes a top-level `preference` field that
-mirrors the user's raw pick (it updates synchronously inside
-`setTheme`), so pickers can drop their optimistic local state
-entirely.
+mirrors the user's raw pick (it is written with the colour swap),
+so pickers can drop their optimistic local state entirely.
 
 ```tsx
 // 1.x
@@ -134,8 +133,9 @@ from another component. No `useEffect` needed.
 ### Reduced Motion
 
 `useReducedMotion()` is no longer exported, and `config.reduceMotion`
-is gone. If you want to honor the OS setting, subscribe yourself and
-pass `animated: false` per call:
+is gone. The current `withTiming` call still inherits Reanimated's
+`ReduceMotion.System` default. To skip capture and overlay setup too,
+subscribe yourself and pass `animated: false` per call:
 
 ```tsx
 import { useEffect, useState } from 'react'

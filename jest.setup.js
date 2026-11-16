@@ -10,6 +10,10 @@ jest.mock('react-native', () => ({
     addEventListener: jest.fn(() => ({ remove: jest.fn() })),
   },
   Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Platform: {
+    OS: 'ios',
+    select: (obj) => (obj.ios !== undefined ? obj.ios : obj.default),
+  },
   View: 'View',
   Image: 'Image',
 }))
@@ -44,12 +48,13 @@ jest.mock('react-native-reanimated', () => {
 
 jest.mock('@shopify/react-native-skia', () => {
   const mockPath = () => ({
-    addCircle: jest.fn(),
-    moveTo: jest.fn(),
-    lineTo: jest.fn(),
-    cubicTo: jest.fn(),
-    close: jest.fn(),
+    // Immutable SkPath surface as of Skia 2.14: no moveTo/lineTo/cubicTo.
+    countPoints: jest.fn(() => 0),
+    isInterpolatable: jest.fn(() => true),
+    interpolate: jest.fn(),
+    dispose: jest.fn(),
   })
+  const makeFromCmds = jest.fn((_cmds) => mockPath())
   return {
     Canvas: 'Canvas',
     Image: 'SkiaImage',
@@ -59,9 +64,11 @@ jest.mock('@shopify/react-native-skia', () => {
     Fill: 'Fill',
     Shader: 'Shader',
     ImageShader: 'ImageShader',
+    PathVerb: { Move: 0, Line: 1, Quad: 2, Conic: 3, Cubic: 4, Close: 5 },
+    interpolatePaths: jest.fn((_val, _input, outputRange) => outputRange[0]),
     usePathInterpolation: () => ({ value: mockPath() }),
     Skia: {
-      Path: { Make: mockPath },
+      Path: { MakeFromCmds: makeFromCmds },
       RuntimeEffect: { Make: jest.fn(() => ({})) },
     },
     makeImageFromView: jest.fn(() => {

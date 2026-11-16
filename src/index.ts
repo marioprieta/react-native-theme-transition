@@ -29,4 +29,5 @@ export type {
   TransitionOrigin,
   TransitionType,
   UseThemeResult,
+  ViewRef,
 } from './types'

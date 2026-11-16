@@ -19,10 +19,10 @@
 ## Features
 
 - **Nine transition styles.** `fade`, `circularReveal`, `heart`, `star`, `wipe`, `slide`, `split`, `pixelize`, `dissolve`.
-- **Expo Go ready.** Works on Expo SDK 55+ out of the box. Bare React Native CLI also supported.
+- **Expo Go ready.** Uses Skia and Reanimated without a package-specific native module. Current device checks use native Debug builds on Expo SDK 58 / React Native 0.88.1; earlier checks used Expo Go. See the compatibility notes below.
 - **Full TypeScript inference.** `useTheme()` and `setTheme()` know your theme names and color tokens without manual generics.
 - **System theme built in.** Follows OS appearance with zero-flash startup.
-- **Strict runtime validation.** Invalid options throw immediately with clear error messages.
+- **Runtime checks.** Configuration and numeric options are validated with descriptive errors; per-call variant names remain primarily TypeScript-checked.
 - **React Compiler compatible.** All hooks follow the [Rules of React](https://react.dev/reference/rules).
 
 ## Requirements
@@ -34,20 +34,35 @@
 
 ## Try it
 
-- [Snack](https://snack.expo.dev/@mariops03/react-native-theme-transition) Live playground with the 9 transitions. **Open it on iOS** — Snack's Android preview runs slowly and the animations don't render (this is a Snack limitation, not a library one; animations run fine on real Android devices and in release builds).
+- [Demo app](https://github.com/marioprieta/theme-demo) Primary demo: an Expo SDK 58 app running `react-native-theme-transition` 2.0.2 on iOS and Android.
+- [Snack](https://snack.expo.dev/@mariops03/react-native-theme-transition) Separate public playground. It currently supports Expo SDK 55 at most, so check its dependency versions before comparing it with the SDK 58 validation baseline. The web preview is unsupported because the Skia `RuntimeEffect` overlays are native-only.
 - [Docs](https://react-native-theme-transition.vercel.app) API reference, recipes, migration guide.
+
+Using `expo-glass-effect`? Pass `colorScheme={theme.scheme}` to `GlassView` to keep its material color aligned during a fade. See the [Liquid Glass recipe](https://react-native-theme-transition.vercel.app/docs/recipes/glass-effect) for a reusable app component and the verified scope.
+
+The declared peer ranges describe package requirements, not a tested device matrix.
+Runtime checks currently cover Expo SDK 58.0.25 with React 19.3.0, React Native
+0.88.1, Skia 2.14.0, Reanimated 4.7.1 and Worklets 0.13.0, using native Debug
+builds of the demo app on an iOS 26.5 simulator and an Android API 37 emulator;
+each platform ran all nine transitions light→dark and dark→light (18/18). Earlier
+checks used Expo Go 58.0.3 with React Native 0.88.0, and the detailed liquid-glass
+fade measurements come from that prior Expo Go comparison rather than the current
+native integration. The Skia 2.4.18, 2.6.2 and 2.14.0 CI matrix is configured for
+type-check and build only. These are simulator/emulator results: no physical-device,
+120 Hz, or universal flash-free guarantee is claimed. Older combinations within the
+peer ranges need separate validation.
 
 ## Installation
 
 ```bash
-# Expo (SDK 55+)
-npx expo install react-native-theme-transition @shopify/react-native-skia react-native-worklets
+# Expo (install the versions matched to your SDK)
+npx expo install react-native-theme-transition @shopify/react-native-skia react-native-reanimated react-native-worklets
 
 # React Native CLI
 npm install react-native-theme-transition @shopify/react-native-skia react-native-reanimated react-native-worklets
 ```
 
-Add `react-native-worklets/plugin` as the **last plugin** in your `babel.config.js`. On Expo SDK 55+, do NOT add `react-native-reanimated/plugin`, since `babel-preset-expo` already includes it.
+The documented Expo setup needs no additional Babel plugin: `babel-preset-expo` configures the worklets plugin automatically. Bare React Native CLI projects must add `react-native-worklets/plugin` as the **last plugin** in `babel.config.js` (do not add `react-native-reanimated/plugin` — the worklets plugin replaces it).
 
 > Using Claude Code, Cursor, or Codex? Install the [AI-assisted setup](#ai-assisted-setup) skill first and the agent can run the installation from the v2 API reference.
 

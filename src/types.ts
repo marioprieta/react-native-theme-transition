@@ -2,6 +2,18 @@ import type { View } from 'react-native'
 import type { TransitionType } from './transitionMeta'
 
 /**
+ * Host instance type of a `<View>` ref across every supported React
+ * Native version.
+ *
+ * `React.ComponentRef` resolves to the class instance on React Native
+ * 0.78–0.87 and to the host element type (`ViewInstance`) on 0.88+,
+ * where `View` itself is only a function component. Type your refs with
+ * this alias—`useRef<ViewRef>(null)`—so they satisfy both this
+ * library's `origin` prop and the `ref` prop of `<View>`.
+ */
+export type ViewRef = React.ComponentRef<typeof View>
+
+/**
  * Supported transition names.
  *
  * @see https://react-native-theme-transition.vercel.app/docs/types#transitiontype
@@ -41,7 +53,7 @@ export interface TransitionOrigin {
  *
  * @see https://react-native-theme-transition.vercel.app/docs/types#originspec
  */
-export type OriginSpec = TransitionOrigin | React.RefObject<View | null>
+export type OriginSpec = TransitionOrigin | React.RefObject<ViewRef | null>
 
 /** Union of the theme names declared in `T`. */
 export type ThemeNames<T extends Record<string, ThemeDefinition>> = keyof T & string
@@ -131,8 +143,9 @@ export interface ThemeTransitionConfig<T extends Record<string, ThemeDefinition>
   onTransitionEnd?: (themeName: ThemeNames<T>) => void
 
   /**
-   * Fires whenever the active theme changes, regardless of path. The
-   * only callback guaranteed to fire on every code path. In `'system'`
+   * Notifies theme application after animated completion, instant switches,
+   * or capture-failure fallback. Ignored calls, mode-only no-ops, aborted
+   * start callbacks and unmounts do not notify. In `'system'`
    * mode it can fire twice for a single `setTheme` call if the OS
    * appearance changes while the transition is still in flight.
    *
@@ -328,11 +341,12 @@ export interface UseThemeResult<Tokens extends string, Names extends string> {
 
   /**
    * The theme the user explicitly picked. May be `'system'`. Mirrors
-   * the last argument passed to {@link UseThemeResult.setTheme}.
+   * an accepted choice once it is applied. Animated transitions defer the
+   * preference update until the colour-swap commit.
    */
   preference: Names | 'system'
 
-  /** `true` while a transition overlay is visible. */
+  /** `true` from the colour-swap commit until transition cleanup. */
   isTransitioning: boolean
 
   /**
@@ -340,7 +354,7 @@ export interface UseThemeResult<Tokens extends string, Names extends string> {
    *
    * @param name - Concrete theme name, or `'system'` to follow the OS.
    * @param options - Per-call transition configuration.
-   * @returns `'accepted'` if the change will apply, `'ignored'` if rejected (same preference or transition in flight).
+   * @returns `'accepted'` if the change will apply, `'ignored'` for an unchanged resolved target and mode, or a transition in flight.
    * @see https://react-native-theme-transition.vercel.app/docs/api/use-theme#settheme
    */
   setTheme: (name: Names | 'system', options?: SetThemeOptions<Names>) => 'accepted' | 'ignored'

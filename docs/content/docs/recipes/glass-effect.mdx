@@ -1,0 +1,93 @@
+---
+title: Liquid Glass
+description: Keep expo-glass-effect's material color aligned with the app theme during a fade.
+---
+
+Pass `theme.scheme` to `expo-glass-effect`'s `GlassView` so its material
+follows the app theme during the transition. Leaving `colorScheme` at
+its default `'auto'` makes the glass depend on the native window
+appearance, which the transition engine updates after the animation.
+
+## Installation
+
+```bash
+npx expo install expo-glass-effect
+```
+
+Expo Go ships this module on every SDK the library supports
+(55 through 58), so no development build is required to try the
+recipe.
+
+Use the version compatible with your Expo SDK. Material updates when
+changing `colorScheme` were fixed in `expo-glass-effect` 55.0.8
+([Expo issue #43743](https://github.com/expo/expo/issues/43743)).
+
+## Reusable Component
+
+This component belongs in your app, alongside the theme factory.
+Adjust the `@/lib/theme` import to the module that exports your factory's
+`useTheme` hook, and render the component inside its
+`ThemeTransitionProvider`.
+
+```tsx title="components/ThemedGlassView.tsx"
+import { GlassView, type GlassViewProps } from 'expo-glass-effect'
+import { useTheme } from '@/lib/theme'
+
+type ThemedGlassViewProps = Omit<GlassViewProps, 'colorScheme'>
+
+export function ThemedGlassView(props: ThemedGlassViewProps) {
+  const { theme } = useTheme()
+
+  return <GlassView {...props} colorScheme={theme.scheme} />
+}
+```
+
+The wrapper forwards children, styles and the other `GlassView` props.
+Its `colorScheme` comes from the theme hook; callers do not override it.
+Use the binary `theme.scheme` rather than `theme.name` or `preference`,
+which can contain custom names or `'system'`.
+
+```tsx title="components/SettingsCard.tsx"
+import { Text } from 'react-native'
+import { useTheme } from '@/lib/theme'
+import { ThemedGlassView } from './ThemedGlassView'
+
+export function SettingsCard() {
+  const { theme } = useTheme()
+
+  return (
+    <ThemedGlassView style={{ padding: 16, borderRadius: 16 }}>
+      <Text style={{ color: theme.colors.text }}>Settings</Text>
+    </ThemedGlassView>
+  )
+}
+```
+
+Keep the card's content background transparent so it does not cover the
+glass material. On supported iOS versions, this is still the native
+`GlassView`; see [Expo's GlassEffect documentation](https://docs.expo.dev/versions/v58.0.0/sdk/glass-effect/)
+for platform availability and fallback behavior.
+
+## What Was Verified
+
+The existing library engine was tested with `fade` in both directions
+at 3000 ms on an iOS 26.5 simulator with Expo Go 58.0.3 (SDK 58, React
+Native 0.88.0, `expo-glass-effect` 58.0.4, Skia 2.14.0), and at 350 ms and
+3000 ms on the earlier SDK 57 stack. That detailed comparison predates the
+current native Debug integration (Expo 58.0.25, React Native 0.88.1), where
+the fixture was inspected visually but not re-measured at those durations.
+In both, an explicit scheme kept the material
+color moving with the theme during the fade while the default scheme
+held the previous appearance until the transition ended: in a
+light-to-dark fade the explicit card's mean gray fell from 220 to 63
+while the inherited card stayed at 227 and only dropped after the fade
+finished.
+
+This is a partial workaround for the appearance change at the end of
+a fade. It does not turn the overlay into live glass: snapshots still
+freeze refraction and highlights while visible, and elimination of
+every final-frame artifact has not been established. Other transitions
+and other glass implementations were not validated by this comparison.
+
+Whole-window capture did not show a clear improvement in the experiment;
+this integration uses the library's existing snapshot engine.

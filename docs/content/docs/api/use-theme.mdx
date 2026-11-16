@@ -125,9 +125,10 @@ setTheme(name, options?): 'accepted' | 'ignored'
 ```
 
 Changes the user's preference. The new preference is reflected
-synchronously in subsequent reads of `preference`, so picker UIs
-that highlight against it can repaint before the snapshot is
-captured.
+with the colour swap: an animated transition writes it in the
+commit that applies the new theme, while `animated: false` and a
+`'system'` pick that keeps the painted theme write it right away.
+Picker UIs that highlight against it need no local state.
 
 ### Arguments
 
@@ -141,7 +142,7 @@ captured.
 | Value | Meaning |
 |---|---|
 | `'accepted'` | The library will apply the change, instantly or via an animated transition. |
-| `'ignored'` | A transition is already in flight, or the call targets the same preference that's already active. |
+| `'ignored'` | A transition is in flight, or both the resolved target and system/manual mode are unchanged. |
 
 Most callers can discard the return value. `isTransitioning` and the
 configured callbacks cover the common cases. The discriminated
@@ -172,8 +173,9 @@ setTheme('dark', { animated: false })
 
 ## `isTransitioning`
 
-`true` from just after the snapshot is captured until the animation
-completes. Use it to disable interactive controls so a second call
+`true` from the colour-swap commit until JS cleanup runs. The old
+snapshot is already mounted and the paint waits have completed when this
+flag changes; it does not cover the initial capture/setup period. Use it to disable interactive controls so a second call
 can't be queued mid-transition.
 
 ```tsx
@@ -192,10 +194,12 @@ can't be queued mid-transition.
 
 ## Picker Pattern
 
-`preference` updates synchronously inside `setTheme`, so pickers can
-highlight against it directly. No local `picked` state is needed.
-The engine waits one frame before capturing the snapshot, which
-gives React time to commit and paint the new highlight.
+`preference` is written in the commit that swaps the colour tokens,
+so pickers can highlight against it directly. No local `picked`
+state is needed. This avoids a preference-driven context update
+before capture. The snapshot retains the previous selection; the new
+highlight appears as the overlay reveals the new theme. System-mode
+changes and app callbacks can still trigger other React updates.
 
 ```tsx
 import { Pressable, Text, View } from 'react-native'

@@ -1,4 +1,4 @@
-import { decideSetTheme } from '../src/setThemeDecision'
+import { decideSetTheme, preferenceWriteTiming } from '../src/setThemeDecision'
 
 describe('decideSetTheme', () => {
   const base = {
@@ -73,5 +73,20 @@ describe('decideSetTheme', () => {
         modeFlipped: true,
       }),
     ).toEqual({ status: 'ignored', reason: 'transitioning' })
+  })
+})
+
+describe('preferenceWriteTiming', () => {
+  it('defers an animated theme swap to the colour swap commit', () => {
+    expect(preferenceWriteTiming('proceed', true)).toBe('deferred')
+  })
+
+  it('writes eagerly when the transition is instant', () => {
+    expect(preferenceWriteTiming('proceed', false)).toBe('eager')
+  })
+
+  it('writes eagerly for a system-mode flip that keeps the painted theme', () => {
+    expect(preferenceWriteTiming('mode-flip-noop', true)).toBe('eager')
+    expect(preferenceWriteTiming('mode-flip-noop', false)).toBe('eager')
   })
 })

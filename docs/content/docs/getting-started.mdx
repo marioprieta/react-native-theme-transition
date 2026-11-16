@@ -4,7 +4,7 @@ description: Install react-native-theme-transition and its peer dependencies in 
 ---
 
 `react-native-theme-transition` ships as a pure JavaScript / TypeScript
-package. Installing it means installing the package itself plus three
+package. Installing it means installing the package itself plus the
 peer dependencies that handle the heavy lifting: `@shopify/react-native-skia`
 (snapshot capture and rendering), `react-native-reanimated` (the
 animation driver), and `react-native-worklets` (the worklet runtime
@@ -12,30 +12,32 @@ Reanimated 4 builds on).
 
 ## Installation
 
-<Callout type="warn">
-  **Expo SDK 55+ required.** The library depends on Skia 2 and
-  Reanimated 4 native bindings, which only ship with Expo Go on
-  SDK 55 and newer. On SDK 54 the JS side installs fine but the
-  native module registration fails at runtime (app freezes on
-  Android, silent fallback to instant swap on iOS). Upgrade with
-  `npx expo install expo@latest --fix` before installing the
-  library.
+<Callout type="info">
+  **Runtime baseline: Expo SDK 58.** Current device checks use native Debug
+  builds of the demo app on Expo 58.0.25 with React Native 0.88.1, an iOS 26.5
+  simulator and an Android API 37 emulator. Earlier checks used Expo Go 58.0.3
+  with React Native 0.88.0. Install native peers with `npx expo install` so
+  their JavaScript versions match your SDK's native runtime. The declared peer
+  ranges do not prove compatibility with every older Expo Go release.
 </Callout>
 
-<Tabs items={['Expo (SDK 55+)', 'React Native CLI']}>
-  <Tab value="Expo (SDK 55+)">
-    Reanimated and Skia ship with modern Expo SDKs, so you don't need
-    to install Reanimated separately.
+SDK 54 already bundles Skia 2.2.12, Reanimated ~4.1.1 and Worklets 0.5.1
+([Expo's SDK 54 manifest](https://github.com/expo/expo/blob/sdk-54/packages/expo/bundledNativeModules.json)).
+Its exclusion cannot be justified by missing Skia 2 or Reanimated 4 bindings;
+the current engine still needs an SDK-specific compatibility check before
+claiming support on that runtime.
+
+<Tabs items={['Expo', 'React Native CLI']}>
+  <Tab value="Expo">
+    Install every native peer explicitly, using the versions matched
+    to your Expo SDK:
 
     ```bash
-    npx expo install react-native-theme-transition @shopify/react-native-skia react-native-worklets
+    npx expo install react-native-theme-transition @shopify/react-native-skia react-native-reanimated react-native-worklets
     ```
 
-    <Callout type="info">
-      The SDK 55 blank template no longer bundles `babel-preset-expo`.
-      If your project doesn't have a `babel.config.js` yet, install
-      it: `npx expo install babel-preset-expo`.
-    </Callout>
+    No additional Babel configuration is needed for this Expo setup:
+    `babel-preset-expo` already registers the worklets plugin.
   </Tab>
   <Tab value="React Native CLI">
     ```bash
@@ -52,28 +54,44 @@ Reanimated 4 builds on).
 
 ## Tested Versions
 
-The peer dependency minimums in `package.json` are the lowest
-versions the library is built to support, but day-to-day development
-and CI run against a tighter, modern set:
+The peer ranges in `package.json` are declared requirements, not a
+guarantee that their minimum versions work together. Each peer also has
+its own compatibility constraints. Development and configured CI checks
+use a tighter set:
 
 | Peer | Declared minimum | Tested against |
 |---|---|---|
-| `react` | `>=19.0.0` | `19.2.0` |
-| `react-native` | `>=0.78.0` | `0.83.x` |
-| `@shopify/react-native-skia` | `>=2.0.0` | `2.4.x` |
-| `react-native-reanimated` | `>=4.0.0` | `4.2.x` |
-| `react-native-worklets` | `>=0.5.0` | `0.7.x` |
+| `react` | `>=19.0.0` | `19.3.0` |
+| `react-native` | `>=0.78.0` | `0.88.1` |
+| `@shopify/react-native-skia` | `>=2.0.0` | `2.14.x` (test suite and build); `2.4.18`, `2.6.2`, and `2.14.0` (type-check and build) |
+| `react-native-reanimated` | `>=4.0.0` | `4.7.x` |
+| `react-native-worklets` | `>=0.5.0` | `0.13.x` |
+
+"Tested against" distinguishes the configured CI checks from runtime checks. The unit
+suite and lint run on the locked SDK 58 development baseline (Expo 58.0.25,
+React Native 0.88.1, `@shopify/react-native-skia` 2.14.0, the version Expo SDK 58
+installs). CI is configured to run the type-check and build against exactly Skia
+2.4.18, 2.6.2, and 2.14.0. The minimum peer ranges are broader than
+this matrix, so versions between those points are not
+exercised; the alternate Skia versions in the matrix are types/build
+only and never run on a device.
+
+Device checks use native Debug builds of the demo app on Expo 58.0.25 with
+React Native 0.88.1 (iOS 26.5 simulator and Android API 37 emulator). Each
+platform ran all nine transitions light→dark and dark→light (18/18), including
+the inverted heart and star transitions on Skia 2.14.0. Earlier checks used
+Expo Go 58.0.3 with React Native 0.88.0. These are simulator/emulator results:
+no physical-device, 120 Hz, or universal flash-free guarantee is claimed.
 
 If you hit a real bug on the declared minimums, please file an
-issue with your exact lockfile versions. The minimums are kept
-honest by the published peer ranges, not by a continuous test
-matrix.
+issue with your exact lockfile versions.
 
 ## Bare React Native CLI: Verify the New Architecture
 
-Skia 2 and Reanimated 4 require React Native's New Architecture
-(Fabric + TurboModules). On React Native 0.78+ it is enabled by
-default. Expo SDK 55+ already enables it for managed apps.
+Reanimated 4 requires React Native's New Architecture
+(Fabric + TurboModules). The RN 0.88 development baseline uses it.
+Enabling Fabric alone does not prove that every version combination
+in the declared peer ranges is compatible.
 
 Bare React Native CLI projects upgraded from older versions can
 still have the old architecture wired in. Confirm before installing:
@@ -85,19 +103,22 @@ If either is off, enable it and run a clean install (`pod install`,
 Gradle sync). Without the New Architecture the build fails with
 errors that mention `RCTFabric` or `TurboModule`.
 
-## Configure Babel
+## Configure Babel (Bare React Native CLI)
 
-Add `react-native-worklets/plugin` as the **last** plugin in your
-`babel.config.js`:
+Expo apps using the documented preset setup skip this section: `babel-preset-expo` already
+registers the worklets plugin (and Reanimated's plugin).
+
+Bare React Native CLI projects must add `react-native-worklets/plugin`
+as the **last** plugin in `babel.config.js`:
 
 ```js title="babel.config.js"
 module.exports = function (api) {
   api.cache(true)
   return {
-    presets: ['babel-preset-expo'],
+    presets: ['module:@react-native/babel-preset'],
     plugins: [
-      // Do NOT add 'react-native-reanimated/plugin' — babel-preset-expo
-      // already includes it on SDK 55+.
+      // Do NOT add 'react-native-reanimated/plugin' — the worklets
+      // plugin replaces it.
       'react-native-worklets/plugin', // must be last
     ],
   }

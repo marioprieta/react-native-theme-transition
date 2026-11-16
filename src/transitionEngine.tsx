@@ -4,37 +4,40 @@
  * @remarks
  * Capture and overlay both use `@shopify/react-native-skia`; a single
  * 0 → 1 `progress` shared value drives every transition kind. The
- * library is policy-free about OS Reduce Motion. Consumers who want
- * to honor it pass `animated: false` per call.
+ * library has no explicit Reduce Motion check; `withTiming` inherits
+ * Reanimated's system setting. `animated: false` also skips capture.
  *
  * **State machine.** Each animated transition runs the following steps
  * in order:
  *
  * 1. `setTheme`: sync writes (`transitioningRef`, `isBlocking`,
- *    `intendedThemeRef`, `preference`) so picker UIs repaint before
- *    capture. `runTransition` is kicked off async and the config and
- *    per-call `onTransitionStart` callbacks fire.
- * 2. **`SETTLE.beforeCapture`**: wait one frame so React has flushed
- *    the sync writes and any pressed-state repaints made it to screen
- *    before the snapshot is taken.
- * 3. **Capture old**: `captureView` grabs a CPU-backed `SkImage` of the
+ *    `intendedThemeRef`). The config and per-call `onTransitionStart`
+ *    callbacks run before capture. The user's pick is stashed in a ref
+ *    until commit 2, avoiding an early context update for manual swaps.
+ *    System-mode changes can still enqueue React state, and consumer
+ *    callbacks may enqueue their own updates.
+ * 2. **Capture old**: `captureView` grabs a CPU-backed `SkImage` of the
  *    inner tree. If capture fails, the engine falls back to an instant
  *    swap (no overlay, only `onThemeChange` fires).
- * 4. **Commit 1**: `setOverlayParams` + `setSkImage` mount the snapshot
+ * 3. **Commit 1**: `setOverlayParams` + `setSkImage` mount the snapshot
  *    on the pre-mounted Canvas.
- * 5. **`SETTLE.skiaPaint`**: wait so Skia paints the snapshot before
- *    the inner tree swaps its colors. Otherwise the new theme flashes
- *    through on Android.
- * 6. **Commit 2**: `setIsTransitioning(true)` + `setActiveTheme(new)`
- *    swap the inner tree underneath the now-covering overlay.
- * 7. **`SETTLE.treeRepaint` (conditional)**: for reveal, shape, and
+ * 4. **`SETTLE.overlayCommit` + `SETTLE.skiaPaintSynced`**: one frame
+ *    lets the mounted snapshot reach the native Canvas,
+ *    `syncOverlayPaint` then spends a Skia paint round trip on it, and
+ *    one more frame allows compositing before swapping the inner tree.
+ *    This is an empirical guard, not a display-presentation callback.
+ *    Falls back to `SETTLE.skiaPaint` when the probe is unavailable.
+ * 5. **Commit 2**: `setIsTransitioning(true)` + `setActiveTheme(new)`
+ *    swap the inner tree underneath the now-covering overlay, and the
+ *    stashed pick lands in `preference` in the same commit.
+ * 6. **`SETTLE.treeRepaint` (conditional)**: for reveal, shape, and
  *    dual-image transitions, wait an extra frame so the inner tree
  *    has repainted in the new theme before the second capture.
- * 8. **Capture new (conditional)**: for `slide` and `pixelize`
+ * 7. **Capture new (conditional)**: for `slide` and `pixelize`
  *    (`TRANSITION_META[kind].capturesNew === true`), capture a second
  *    snapshot of the inner tree in the new theme and mount it as
  *    `imageNew` on the overlay.
- * 9. **Animate**: Reanimated animates `progress` 0 → 1 and a
+ * 8. **Animate**: Reanimated animates `progress` 0 → 1 and a
  *    `setTimeout(duration)` fires the `finish` cleanup, which resets
  *    the overlay and fires `onTransitionEnd` (config and per-call) and
  *    `onThemeChange`. If the OS appearance changed while in `'system'`
@@ -52,9 +55,16 @@
  * @internal
  */
 
-import type { SkImage } from '@shopify/react-native-skia'
+import type { CanvasRef, SkImage } from '@shopify/react-native-skia'
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Appearance, AppState, Dimensions, type LayoutChangeEvent, View } from 'react-native'
+import {
+  Appearance,
+  AppState,
+  Dimensions,
+  type LayoutChangeEvent,
+  Platform,
+  View,
+} from 'react-native'
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -73,7 +83,7 @@ import {
   DEFAULT_SPLIT_MODE,
   type OverlayParams,
 } from './overlay/types'
-import { decideSetTheme } from './setThemeDecision'
+import { decideSetTheme, preferenceWriteTiming } from './setThemeDecision'
 import type { SplitMode, WipeDirection } from './transitionMeta'
 import { TRANSITION_META } from './transitionMeta'
 import type {
@@ -87,6 +97,7 @@ import type {
   TokenNames,
   TransitionType,
   UseThemeResult,
+  ViewRef,
 } from './types'
 import { validateSetThemeOptions } from './validateSetThemeOptions'
 
@@ -137,16 +148,48 @@ function waitFrames(n: number): Promise<void> {
 /**
  * @internal Frame budgets for the engine's settle points. Tuned empirically.
  *
- * - `beforeCapture` (1): lets React batching paint a picker's
- *   optimistic highlight before the snapshot.
- * - `skiaPaint` (2): Android occasionally loses the race between the
- *   color swap and the Canvas's first paint and flashes the new theme
- *   through for a frame; one frame is enough on iOS.
+ * - `overlayCommit` (1): lets the mounted snapshot reach the native
+ *   Canvas before {@link syncOverlayPaint} probes its paint.
+ * - `skiaPaintSynced` (1): after the offscreen probe completes,
+ *   allow a frame for compositing; presentation is not acknowledged.
+ * - `skiaPaint` (2/3): fallback when that probe is unavailable. Without
+ *   it Android occasionally loses the race between the color swap and the
+ *   Canvas's first paint and flashes the new theme through for a frame.
  * - `treeRepaint` (1): gives Android a frame to repaint deep
  *   ScrollView children before a reveal/shape animation exposes them
  *   through a growing hole.
  */
-const SETTLE = { beforeCapture: 1, skiaPaint: 2, treeRepaint: 1 } as const
+const SETTLE = {
+  overlayCommit: 1,
+  skiaPaintSynced: 1,
+  skiaPaint: Platform.select({ android: 3, default: 2 }) ?? 2,
+  treeRepaint: 1,
+} as const
+
+/**
+ * @internal Spends a Skia paint round trip on the mounted snapshot.
+ *
+ * RN Skia 2.x exposes no paint callback, so the colour swap used to be gated
+ * only by a frame budget; when the render thread was still uploading the
+ * snapshot, the swap could show the new theme for a frame. After an
+ * overlay-commit frame, `makeImageSnapshotAsync` re-renders the Canvas's
+ * current picture offscreen on the main thread and reads it back. This
+ * adds a measured rendering round trip while the swap stays blocked,
+ * but does not acknowledge a particular React commit or on-screen paint.
+ * Returns `false` when the handle or call is unavailable; callers then
+ * fall back to the frame budget.
+ */
+async function syncOverlayPaint(ref: { current: CanvasRef | null }): Promise<boolean> {
+  try {
+    const canvas = ref.current
+    if (!canvas) return false
+    const probe = await canvas.makeImageSnapshotAsync()
+    probe.dispose()
+    return true
+  } catch {
+    return false
+  }
+}
 
 /** @internal Coerces an `Appearance.getColorScheme()` return value to a {@link ColorScheme}. */
 function normalizeScheme(
@@ -241,13 +284,14 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
     // descendants - capturing `innerRef` yields the app tree without
     // them, so the second-snapshot capture (slide/pixelize) doesn't
     // re-photograph the in-flight overlay.
-    const innerRef = useRef<View>(null)
+    const innerRef = useRef<ViewRef>(null)
+    const overlayCanvasRef = useRef<CanvasRef | null>(null)
     // Measured layout, not `Dimensions.get('window')`: on Android
     // edge-to-edge the window dims don't match the painted area and
     // the overlay snapshot would render at the wrong height.
     const innerSizeRef = useRef({ width: 0, height: 0 })
     // Sync guard for concurrent `setTheme` calls. Mirrors the React
-    // `isTransitioning` state but flips one frame earlier.
+    // `isTransitioning` state but flips before capture and paint waits.
     const transitioningRef = useRef(false)
     const mountedRef = useRef(true)
     const [isTransitioning, setIsTransitioning] = useState(false)
@@ -257,15 +301,26 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
     // below so `setColorScheme('unspecified')` lands AFTER the overlay
     // is covering the screen (otherwise it flashes Android's status bar).
     const [isSystemMode, setIsSystemMode] = useState(initialTheme === 'system')
-    // The user's explicit pick. Written synchronously inside `setTheme`
-    // so pickers that highlight against it repaint BEFORE the snapshot
-    // - `activeTheme` is too late (commit 2).
+    // The user's explicit pick. Animated transitions stash it in
+    // `deferredPreferenceRef` and the commit that swaps the colour tokens
+    // flushes it here, so pickers that highlight against it move with the
+    // theme without an early preference-driven context update.
     const [preference, setPreference] = useState<Names | 'system'>(() =>
       initialTheme === 'system' ? 'system' : (initialTheme as Names),
     )
     const appStateRef = useRef(AppState.currentState)
     const pendingSchemeRef = useRef<ColorScheme | null>(null)
     const deferredSystemRestoreRef = useRef<ColorScheme | null>(null)
+    // The pick an animated transition stashes instead of writing it up front,
+    // applied by the commit that swaps the colour tokens (or by the fallback
+    // paths when the transition never reaches that commit).
+    const deferredPreferenceRef = useRef<Names | 'system' | null>(null)
+
+    const flushDeferredPreference = useCallback(() => {
+      if (deferredPreferenceRef.current === null) return
+      setPreference(deferredPreferenceRef.current)
+      deferredPreferenceRef.current = null
+    }, [])
 
     // Touch blocker. The Canvas has `pointerEvents="none"` so taps
     // pass through it; this sibling view catches them while the
@@ -283,10 +338,9 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
     const [skImageNew, setSkImageNew] = useState<SkImage | null>(null)
     const [overlayParams, setOverlayParams] = useState<OverlayParams | null>(null)
     const progress = useSharedValue(0)
-    // Reanimated 4's worklet completion callback doesn't reliably fire
-    // for dynamic closures created inside nested async functions, so
-    // we drive `finish` from a plain `setTimeout(duration)` instead -
-    // same clock as the UI-thread animation, no worklet serialization.
+    // Cleanup currently uses a JS timer instead of worklet completion.
+    // It shares the configured duration, but its scheduling is independent
+    // of UI animation frames and can be delayed when JS is busy.
     // The handle lives in a ref so unmount can cancel an in-flight timer.
     const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     useEffect(() => {
@@ -381,17 +435,17 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
         }
 
         const instantFallback = () => {
+          flushDeferredPreference()
           setActiveTheme({ colors: getColors(name), name })
           resetTransition()
           safeCall('config onThemeChange', onThemeChange, name)
         }
 
-        // SkImages captured but not yet handed off to React state. The
-        // `finally` block disposes anything left here on error/unmount
-        // so a partially-completed transition can't leak GPU memory.
+        // Images registered here are disposed in `finally` until ownership
+        // transfers to state. State-owned images and captures that resolve
+        // after unmount are outside this list's cleanup coverage.
         const pending: SkImage[] = []
         try {
-          await waitFrames(SETTLE.beforeCapture)
           if (!mountedRef.current) return
 
           const capturedOld = await captureView(innerRef)
@@ -429,12 +483,17 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
           setSkImage(capturedOld)
           pending.pop() // ownership transferred to state
 
-          await waitFrames(SETTLE.skiaPaint)
+          await waitFrames(SETTLE.overlayCommit)
           if (!mountedRef.current) return
 
-          // Commit 2 - overlay covers the screen, safe to swap colors.
+          const paintSynced = await syncOverlayPaint(overlayCanvasRef)
+          await waitFrames(paintSynced ? SETTLE.skiaPaintSynced : SETTLE.skiaPaint)
+          if (!mountedRef.current) return
+
+          // Commit 2 - swap after the offscreen probe and composite margin.
           setIsTransitioning(true)
           setActiveTheme({ colors: getColors(name), name })
+          flushDeferredPreference()
           await deferredRestore()
 
           // Reveal/shape transitions and any transition that captures
@@ -452,7 +511,10 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
               pending.push(capturedNew)
               setSkImageNew(capturedNew)
               pending.pop()
-              await waitFrames(SETTLE.skiaPaint)
+              await waitFrames(SETTLE.overlayCommit)
+              if (!mountedRef.current) return
+              const newPaintSynced = await syncOverlayPaint(overlayCanvasRef)
+              await waitFrames(newPaintSynced ? SETTLE.skiaPaintSynced : SETTLE.skiaPaint)
               if (!mountedRef.current) return
             }
           }
@@ -486,7 +548,7 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
           for (const img of pending) img.dispose()
         }
       },
-      [progress, resetTransition],
+      [progress, resetTransition, flushDeferredPreference],
     )
 
     const setTheme = useCallback(
@@ -535,7 +597,9 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
         })
         if (decision.status === 'ignored') return 'ignored'
 
-        setPreference(name)
+        const animatedOpt = options?.animated ?? configAnimated
+        if (preferenceWriteTiming(decision.path, animatedOpt) === 'eager') setPreference(name)
+        else deferredPreferenceRef.current = name
         // `mode-flip-noop`: same painted theme but the user's system
         // pick changed. `preference` is already synced above; nothing
         // left to animate.
@@ -543,7 +607,6 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
 
         intendedThemeRef.current = resolvedTheme
 
-        const animatedOpt = options?.animated ?? configAnimated
         if (animatedOpt === false) {
           setActiveTheme({ colors: getColors(resolvedTheme), name: resolvedTheme })
           safeCall('config onThemeChange', onThemeChange, resolvedTheme)
@@ -557,6 +620,7 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
           configOnTransitionStart?.(resolvedTheme)
           options?.onTransitionStart?.(resolvedTheme)
         } catch (e) {
+          flushDeferredPreference()
           resetTransition()
           throw e
         }
@@ -565,7 +629,7 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
         runTransition(resolvedTheme, options ?? {}, effectiveTransition).catch(() => {})
         return 'accepted'
       },
-      [isBlocking, resetTransition, runTransition],
+      [isBlocking, resetTransition, runTransition, flushDeferredPreference],
     )
 
     // Mirror `setTheme` in a ref so the OS-listener effect runs with
@@ -645,6 +709,7 @@ export function createProviderAndContext<T extends Record<string, ThemeDefinitio
             imageNew={skImageNew}
             progress={progress}
             params={overlayParamsForRender}
+            canvasRef={overlayCanvasRef}
           />
         </View>
       </Context>

@@ -1,9 +1,10 @@
-import type { View } from 'react-native'
 import { captureView } from '../src/overlay/captureView'
+import type { ViewRef } from '../src/types'
 
 const { makeImageFromView } = require('@shopify/react-native-skia')
 
-const mockRef = (current: unknown = {}) => ({ current }) as unknown as React.RefObject<View | null>
+const mockRef = (current: unknown = {}) =>
+  ({ current }) as unknown as React.RefObject<ViewRef | null>
 
 describe('captureView', () => {
   beforeEach(() => jest.clearAllMocks())
