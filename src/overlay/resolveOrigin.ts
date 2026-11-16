@@ -5,8 +5,7 @@
  * @internal
  */
 
-import type { View } from 'react-native'
-import type { OriginSpec, TransitionOrigin } from '../types'
+import type { OriginSpec, TransitionOrigin, ViewRef } from '../types'
 
 /**
  * Measures the center point of a View ref. Returns `null` if the ref is
@@ -14,14 +13,14 @@ import type { OriginSpec, TransitionOrigin } from '../types'
  *
  * @remarks
  * `measure` invokes its callback asynchronously on Paper but synchronously on
- * Fabric, because Fabric reaches the Shadow Tree without a bridge hop. v2's
- * peer deps (`react-native >= 0.78.0`, `@shopify/react-native-skia >= 2.0.0`)
- * both require Fabric, so the callback runs before `measure` returns and
- * `result` is already set at the return site. Paper is not a supported target.
+ * Fabric on the locked RN 0.88 baseline: `NativeDOM.measure` reads the Shadow
+ * Tree and invokes the callback before returning. This helper relies on
+ * that synchronous path; it is not an asynchronous measurement adapter.
+ * Reanimated 4 requires the New Architecture; Paper is unsupported.
  *
  * @internal
  */
-export function measureCenter(ref: React.RefObject<View | null>): TransitionOrigin | null {
+export function measureCenter(ref: React.RefObject<ViewRef | null>): TransitionOrigin | null {
   if (!ref.current) return null
   try {
     let result: TransitionOrigin | null = null
@@ -37,7 +36,7 @@ export function measureCenter(ref: React.RefObject<View | null>): TransitionOrig
 }
 
 /** Type guard: is this `OriginSpec` a ref rather than a `{x,y}` point? @internal */
-export function isOriginRef(value: OriginSpec): value is React.RefObject<View | null> {
+export function isOriginRef(value: OriginSpec): value is React.RefObject<ViewRef | null> {
   return 'current' in value
 }
 

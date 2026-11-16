@@ -20,8 +20,8 @@ picks `'system'` it resolves to `'light'` or `'dark'`, and the
 `'system'` row can never win the comparison.
 
 **Fix.** Compare against `preference`. It carries the raw value
-the user passed to `setTheme` (including `'system'`) and updates
-synchronously, so the highlight repaints before the snapshot.
+the user passed to `setTheme` (including `'system'`) and is written
+with the colour swap, so the highlight moves with the theme.
 
 ```tsx
 const { preference, setTheme, isTransitioning } = useTheme()
@@ -88,7 +88,10 @@ center.
 until `onTransitionEnd`:
 
 ```tsx
-const buttonRef = useRef<View>(null)
+import { useRef } from 'react'
+import type { ViewRef } from 'react-native-theme-transition'
+
+const buttonRef = useRef<ViewRef>(null)
 
 <Pressable
   ref={buttonRef}
@@ -223,47 +226,51 @@ const colorMode = useThemeStore((s) => s.colorMode)
 <ThemeTransitionProvider initialTheme={colorMode}>
 ```
 
-## iOS 26 Liquid Glass Containers Freeze Mid-Transition
+## iOS 26: GlassView Changes Appearance at the End of a Fade
 
-**Symptom.** An `expo-glass-effect` `GlassView` (or
-`@callstack/liquid-glass`, or any iOS 26 liquid glass container)
-used as app-level content stays frozen during the animation and
-snaps to its new appearance at the end. On `light → dark` the
-card looks whitish for the whole fade, then jumps.
+**Symptom.** An `expo-glass-effect` `GlassView` stays light while
+the rest of the screen fades to dark, then changes its material
+appearance at the end.
 
-**Cause.** Skia's `makeImageFromView` captures through UIKit's
-`drawViewHierarchyInRect:afterScreenUpdates:YES`, which bakes
-the current `UIVisualEffectView` state into the bitmap. Liquid
-glass needs that view alive to do real-time lensing, specular
-highlights, and ambient refraction. Once those effects are
-frozen into a texture, they can't keep running. It's not a bug
-inside the snapshot path, it's how iOS 26 composites glass.
+**Cause.** By default, `GlassView` inherits the native window's
+appearance. The transition engine defers `Appearance.setColorScheme`
+until the animation finishes to avoid changing native chrome before
+the transition completes. A glass surface that inherits that appearance
+can therefore lag behind the app's theme tokens.
 
-**What still works.**
+**Fix.** Give the glass its own scheme from `useTheme()`:
 
-- **Native tab bars, native-stack headers (including iOS 26's
-  liquid-glass headers), and system sheet backdrops.** The OS
-  composites these outside the snapshot path, so they animate
-  correctly.
-- **`BlurView` from `expo-blur`.** The classic `UIBlurEffect`
-  does no lensing or highlights, so frozen pixels look right the
-  whole way through.
+```tsx
+const { theme } = useTheme()
 
-**Fix.** For app-level glass (hero cards, large glass panels in
-the middle of the viewport), use `BlurView`, use the system
-glass on tab bars and nav headers, or paint the surface with a
-solid theme token. Reserve `GlassView` for places that don't
-need to animate through a theme change.
+<GlassView colorScheme={theme.scheme}>
+  {children}
+</GlassView>
+```
 
-Proper support would mean mounting live `GlassView`s above the
-Skia overlay during the animation (a "transient re-hosted glass
-layer"). Possible in theory, hard in practice. The biggest
-blocker is that Reanimated's `measure()` on Fabric doesn't
-return `borderRadius` or transforms, so the transient copy can't
-match the original without extra registration boilerplate. Modal
-`UIWindow`s and GPU cost on dense glass layouts make it worse.
-Progress in the
-[issue tracker](https://github.com/marioprieta/react-native-theme-transition/issues).
+Use `theme.scheme`, not `theme.name` or `preference`: the scheme is
+always `'light'` or `'dark'`, including when using custom theme names
+or following the system. See the [Liquid Glass recipe](/docs/recipes/glass-effect)
+for a reusable `ThemedGlassView` component.
+
+Install the version of `expo-glass-effect` compatible with your Expo SDK.
+Expo fixed material updates on `colorScheme` changes in version
+`55.0.8`; see [Expo issue #43743](https://github.com/expo/expo/issues/43743).
+
+**Verified scope.** This improves material-color synchronization during
+`fade`, tested in both directions at 3000 ms on an iOS 26.5 simulator
+with Expo Go 58.0.3 (SDK 58, React Native 0.88.0, `expo-glass-effect` 58.0.4,
+Skia 2.14.0) and at 350 ms and 3000 ms on SDK 57. Those timings are a prior
+Expo Go comparison, not the current native Debug integration (Expo 58.0.25,
+React Native 0.88.1), where the same fixture was inspected visually but not
+re-measured at those durations.
+It does not establish that every end-of-transition artifact disappears.
+The overlay remains a static snapshot: live refraction and highlights
+are not preserved while it is visible. Other transitions and other
+glass libraries have not been verified by this comparison.
+
+Capturing the whole window did not show a clear improvement in the
+same comparison, so this workaround uses the existing Skia engine.
 
 ## Duplicate Plugin / Preset Detected
 

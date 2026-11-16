@@ -3,6 +3,8 @@
  * and the requested change, returns what the engine should do: ignore
  * the call, accept it as a no-op mode flip (only `preference` updates,
  * no animated transition), or proceed with a real theme swap.
+ * `preferenceWriteTiming` covers the follow-up question: which commit
+ * writes the user's pick.
  *
  * Extracted from the `setTheme` closure in `transitionEngine.tsx` so
  * the guard rules can be unit-tested without mounting the provider.
@@ -45,4 +47,20 @@ export function decideSetTheme(input: {
       : { status: 'ignored', reason: 'same-theme' }
   }
   return { status: 'accepted', path: 'proceed' }
+}
+
+/**
+ * Which commit writes the user's `preference` for an accepted call.
+ * `'deferred'` stashes the pick and applies it in the commit that swaps
+ * the colour tokens, avoiding a preference-driven update before the
+ * snapshot; other state/callback updates are independent. The
+ * `'system'`-mode no-op flip and `animated: false` have nothing to defer
+ * to and write immediately.
+ * @internal
+ */
+export function preferenceWriteTiming(
+  path: 'mode-flip-noop' | 'proceed',
+  animated: boolean,
+): 'eager' | 'deferred' {
+  return animated && path === 'proceed' ? 'deferred' : 'eager'
 }

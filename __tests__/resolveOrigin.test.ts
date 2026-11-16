@@ -1,7 +1,7 @@
-import type { View } from 'react-native'
 import { calculateMaxRadius, resolveOrigin } from '../src/overlay/resolveOrigin'
+import type { ViewRef as HostViewRef } from '../src/types'
 
-type ViewRef = React.RefObject<View | null>
+type ViewRef = React.RefObject<HostViewRef | null>
 
 describe('resolveOrigin', () => {
   const screenW = 390

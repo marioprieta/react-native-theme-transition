@@ -51,8 +51,8 @@ interface TransitionMeta {
  * - `capturesNew`: whether the engine needs a second snapshot of the new
  *   theme captured after the color swap, so the transition can render both
  *   old and new simultaneously (`slide`, `pixelize`).
- * - `defaultDuration`: milliseconds used when no per-call or config-level
- *   `duration` is set.
+ * - `defaultDuration`: milliseconds used when no per-call `duration` is set.
+ *   The factory config has no duration field.
  *
  * Use this table to drive UIs that adapt to the selected transition, for
  * example showing an "Inverted" toggle only when `invertible` is `true`.

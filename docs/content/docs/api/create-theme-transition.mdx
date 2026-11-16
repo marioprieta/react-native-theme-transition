@@ -238,9 +238,10 @@ contrast). Omit the field instead to fall back to the default.
 
 ## Reduced Motion
 
-The library does not honor OS Reduce Motion automatically. It is
-policy-free on accessibility. If you want to respect the system
-setting, read it yourself and pass `animated: false` per call.
+The library does not set `withTiming.reduceMotion`, so Reanimated
+uses its default `ReduceMotion.System`. This can finish the visual
+animation before the library's independent JS cleanup timer. To
+skip capture and overlay setup too, pass `animated: false` per call.
 
 ```ts
 import { AccessibilityInfo } from 'react-native'

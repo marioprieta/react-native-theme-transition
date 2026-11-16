@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.0.2
+
+### Patch Changes
+
+- Stop writing `preference` before the snapshot. An animated `setTheme` now
+  stashes the pick and applies it in the commit that swaps the colour tokens
+  instead of re-rendering the consumer tree up front, and the settle frame
+  before the capture is gone with it (`SETTLE.beforeCapture` removed). For a manual swap, no preference-driven React update precedes the snapshot,
+  so capture skips the old settle frame (system-mode changes and app callbacks
+  can still enqueue React updates): on a
+  slow Android emulator the animation starts ~180 ms sooner. `animated: false`
+  and a `'system'` pick that keeps the painted theme keep writing immediately,
+  and a transition that never reaches the colour swap (capture failure, a
+  throwing `onTransitionStart`) flushes the stashed pick so it is never lost.
+  Pickers that highlight against `preference` now move together with the theme
+  rather than one commit earlier.
+- Fix the heart and star reveal overlays on `@shopify/react-native-skia` 2.14+, where `SkPath` became immutable and the `moveTo`/`lineTo`/`cubicTo`/`close` methods were removed. The shape contours are now built as nested `PathCommand[]` and passed to `Skia.Path.MakeFromCmds`; the immutable-path change compiles against Skia 2.4.18, 2.6.2, and 2.14.0 in the configured CI matrix.
+
+  Eliminates initial-frame flash on inverted heart and star transitions by driving path interpolation synchronously with `interpolatePaths` inside `useDerivedValue`, avoiding `usePathInterpolation`'s empty-path initial value.
+
+  Also refreshes the Expo SDK 55+ installation guidance (install `react-native-reanimated` and `react-native-worklets` explicitly; no Babel config is needed with `babel-preset-expo`) and the development baseline (React 19.3.0, React Native 0.88.1, Reanimated 4.7.1, Worklets 0.13.0, Skia 2.14.0, the versions Expo SDK 58 installs). CI is configured to run the type-check and build against Skia 2.4.18, 2.6.2, and 2.14.0 to keep the immutable-path surface honest without touching the lockfile; no device run is implied.
+
+  Adds a `ViewRef` type (`React.ComponentRef<typeof View>`) and types every `View` ref with it. React Native 0.88 turned `View` into a function component whose refs are host instances, so `useRef<View>(null)` no longer satisfies the `origin` prop or the `ref` prop of `<View>`; the alias resolves to the class instance on React Native 0.78–0.87 and to the host instance on 0.88+, keeping one ref type valid across the whole supported range.
+
+  Document the `expo-glass-effect` appearance workaround: pass `theme.scheme` to `GlassView.colorScheme`, with a reusable `ThemedGlassView` app recipe. Clarify the verified fade behavior and the remaining limitations of static snapshots.
+
+- Hold the colour-token swap until the Skia canvas has spent a paint round trip on the old-theme snapshot: wait one frame for the picture to mount, run `syncOverlayPaint` (`makeImageSnapshotAsync` re-renders the picture offscreen and reads it back on the main thread), then wait one more frame for the composite. Falls back to the previous frame budget when the probe is unavailable. This adds an empirical guard against the reported Android flash while the snapshot is being uploaded. The offscreen probe does not acknowledge display presentation; simulator/emulator recordings cannot establish a universal or 120 Hz guarantee.
+
 ## 2.0.1
 
 ### Patch Changes

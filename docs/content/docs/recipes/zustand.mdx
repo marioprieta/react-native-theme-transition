@@ -83,8 +83,8 @@ export default function RootLayout() {
 
 Call both `setTheme` (animates and updates `preference`) and
 `setColorMode` (persists) in the same handler. Drive the highlight
-from `preference`. It updates synchronously inside `setTheme`, so
-no local state is needed.
+from `preference`, which carries the raw pick: no local state is
+needed.
 
 ```tsx
 import { View, Text, Pressable } from 'react-native'
@@ -129,10 +129,10 @@ function ThemeSettings() {
 ```
 
 <Callout type="info">
-  `preference` updates synchronously inside `setTheme`, so the
-  highlight paints in the same commit as the tap. Reading from the
-  store instead would lag one frame and show the wrong highlight
-  during the transition.
+  `preference` is written with the colour swap, so the highlight
+  moves together with the theme. Reading from the store instead
+  would lag behind and show the wrong highlight during the
+  transition.
 </Callout>
 
 ## Redux / Redux Toolkit

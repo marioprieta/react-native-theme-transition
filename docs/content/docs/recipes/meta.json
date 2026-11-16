@@ -5,6 +5,7 @@
     "persistence",
     "zustand",
     "expo-router",
+    "glass-effect",
     "haptic-feedback",
     "multiple-scopes",
     "testing",

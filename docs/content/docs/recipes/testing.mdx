@@ -49,11 +49,11 @@ jest.mock('react-native-reanimated', () => ({
 // Skia - the overlay primitives, plus a fake snapshot pipeline.
 jest.mock('@shopify/react-native-skia', () => {
   const mockPath = () => ({
-    addCircle: jest.fn(),
-    moveTo: jest.fn(),
-    lineTo: jest.fn(),
-    cubicTo: jest.fn(),
-    close: jest.fn(),
+    // Immutable SkPath surface as of Skia 2.14: no moveTo/lineTo/cubicTo.
+    countPoints: jest.fn(() => 0),
+    isInterpolatable: jest.fn(() => true),
+    interpolate: jest.fn(),
+    dispose: jest.fn(),
   })
   return {
     Canvas: 'Canvas',
@@ -64,9 +64,10 @@ jest.mock('@shopify/react-native-skia', () => {
     Fill: 'Fill',
     Shader: 'Shader',
     ImageShader: 'ImageShader',
-    usePathInterpolation: () => ({ value: mockPath() }),
+    PathVerb: { Move: 0, Line: 1, Quad: 2, Conic: 3, Cubic: 4, Close: 5 },
+    interpolatePaths: jest.fn((_value, _input, output) => output[0]),
     Skia: {
-      Path: { Make: mockPath },
+      Path: { MakeFromCmds: jest.fn(() => mockPath()) },
       RuntimeEffect: { Make: jest.fn(() => ({})) },
     },
     makeImageFromView: jest.fn(() =>
@@ -78,7 +79,7 @@ jest.mock('@shopify/react-native-skia', () => {
   }
 })
 
-// Worklets - only `scheduleOnRN` is reached by the engine.
+// Optional Worklets stub for app code; the current engine does not call scheduleOnRN.
 jest.mock('react-native-worklets', () => ({
   scheduleOnRN: (fn) => fn(),
 }))
@@ -116,27 +117,45 @@ describe('Card', () => {
 
 ## Testing `setTheme` Behavior
 
-The mock above replaces the animation pipeline with a no-op, so
-`setTheme` runs through its guards and state machine but does not
-actually render an overlay. This is enough to test the discriminated
-return value, callback firing, and `theme` / `preference` state
-transitions.
+The mocks replace native primitives, not the engine's asynchronous
+control flow. Animated tests must drive requestAnimationFrame and cleanup
+timers, flush capture promises, and inject failures explicitly. These mocks
+do not validate native paint or animation completion. The repository's
+existing unit suite checks configuration and pure helpers; passing those
+checks alone does not prove provider lifecycle correctness.
+
+For a component-level state check, use an instant switch:
 
 ```tsx title="__tests__/ThemePicker.test.tsx"
-import { fireEvent, render } from '@testing-library/react-native'
-import { ThemeTransitionProvider } from '@/lib/theme'
-import { ThemePicker } from '@/components/ThemePicker'
+import { render, screen, userEvent } from '@testing-library/react-native'
+import { Pressable, Text } from 'react-native'
+import { ThemeTransitionProvider, useTheme } from '@/lib/theme'
 
-it('updates the highlight when the user taps a different option', () => {
-  const { getByText } = render(
+function ThemeProbe() {
+  const { theme, preference, setTheme } = useTheme()
+  return (
+    <>
+      <Pressable
+        role="button"
+        aria-label="Dark"
+        onPress={() => setTheme('dark', { animated: false })}
+      >
+        <Text>Dark</Text>
+      </Pressable>
+      <Text>{`${preference}:${theme.name}`}</Text>
+    </>
+  )
+}
+
+it('applies the preference and theme for an instant switch', async () => {
+  const user = userEvent.setup()
+  await render(
     <ThemeTransitionProvider initialTheme="light">
-      <ThemePicker />
+      <ThemeProbe />
     </ThemeTransitionProvider>,
   )
-  fireEvent.press(getByText('Dark'))
-  // `preference` updates synchronously inside `setTheme`, so the
-  // highlight has already moved to the dark option by the time the
-  // press handler returns.
+  await user.press(screen.getByRole('button', { name: 'Dark' }))
+  expect(await screen.findByText('dark:dark')).toBeOnTheScreen()
 })
 ```
 

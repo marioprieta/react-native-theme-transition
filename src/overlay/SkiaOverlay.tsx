@@ -14,107 +14,37 @@
  * @internal
  */
 
-import type { SkImage, SkPath } from '@shopify/react-native-skia'
+import type { CanvasRef, SkImage, SkPath } from '@shopify/react-native-skia'
 import {
   Canvas,
   Circle,
   Fill,
   Group,
   ImageShader,
+  interpolatePaths,
   Rect,
   Shader,
   Skia,
   Image as SkiaImage,
-  usePathInterpolation,
 } from '@shopify/react-native-skia'
 import { useMemo } from 'react'
 import type { SharedValue } from 'react-native-reanimated'
 import { useDerivedValue } from 'react-native-reanimated'
 import { ABSOLUTE_FILL } from '../constants'
 import type { WipeDirection } from '../transitionMeta'
+import {
+  HEART_REACH,
+  makeHeartPath,
+  makeStarPath,
+  orderKeyframes,
+  STAR_GEOMETRY,
+} from './shapePaths'
 import type { OverlayParams } from './types'
 
 /** @internal Frozen style for the Canvas. Hoisted so JSX never reallocates. */
 const CANVAS_STYLE = [ABSOLUTE_FILL, { pointerEvents: 'none' as const }]
-/** @internal Static input domain for `usePathInterpolation`. */
+/** @internal Static input domain for `interpolatePaths`. */
 const KEYFRAME_INPUT = [0, 1]
-
-// ───────────────────────────── Path builders ──────────────────────────────
-
-/**
- * @internal Empirically tuned heart bezier reach factors. The bounding
- * math in `useHeartSize` reads these to compute the smallest scale at
- * which the path covers every screen corner. Kept next to the path
- * builder so the bounds and the curve stay in sync when either is
- * tweaked.
- */
-const HEART_REACH = {
-  /** Bottom tip y-distance from `cy`, in heart-units. */
-  bottomTip: 0.7,
-  /** Top notch dip from `cy`, in heart-units (negative y). */
-  topNotch: 0.55,
-  /** Outer lobe x-reach in heart-units. */
-  lobeX: 1.2,
-  /** Outer lobe y-reach above `cy`, in heart-units. */
-  lobeY: 0.9,
-  /** Bezier control x for the inner curve into the bottom tip. */
-  innerLobeX: 0.7,
-  /** Y-reach factor for the bottom corners (`+y` direction). */
-  bottomCornerY: 0.65,
-  /** Y-reach factor for the top corners (`-y` direction, lobe rises higher). */
-  topCornerY: 0.75,
-} as const
-
-function makeHeartPath(cx: number, cy: number, w: number, h: number): SkPath {
-  const p = Skia.Path.Make()
-  p.moveTo(cx, cy + h * HEART_REACH.bottomTip)
-  p.cubicTo(
-    cx - w * HEART_REACH.lobeX,
-    cy + h * 0.1,
-    cx - w * HEART_REACH.innerLobeX,
-    cy - h * HEART_REACH.lobeY,
-    cx,
-    cy - h * HEART_REACH.topNotch,
-  )
-  p.cubicTo(
-    cx + w * HEART_REACH.innerLobeX,
-    cy - h * HEART_REACH.lobeY,
-    cx + w * HEART_REACH.lobeX,
-    cy + h * 0.1,
-    cx,
-    cy + h * HEART_REACH.bottomTip,
-  )
-  p.close()
-  return p
-}
-
-/**
- * @internal Star geometry. `INNER_RATIO` is the valley-to-tip ratio
- * (5-point star with deep valleys). `OUTER_PADDING` over-extends the
- * tips past the screen corner so the inner valleys still cover them.
- */
-const STAR_GEOMETRY = { points: 5, innerRatio: 0.4, outerPadding: 1.05 } as const
-
-function makeStarPath(cx: number, cy: number, rOuter: number, rInner: number): SkPath {
-  const p = Skia.Path.Make()
-  const step = Math.PI / STAR_GEOMETRY.points
-  const start = -Math.PI / 2
-  for (let i = 0; i < STAR_GEOMETRY.points * 2; i++) {
-    const r = i % 2 === 0 ? rOuter : rInner
-    const a = start + i * step
-    const x = cx + Math.cos(a) * r
-    const y = cy + Math.sin(a) * r
-    if (i === 0) p.moveTo(x, y)
-    else p.lineTo(x, y)
-  }
-  p.close()
-  return p
-}
-
-/** @internal Order keyframes so `progress` 0 → 1 grows the shape (or shrinks if inverted). */
-function orderKeyframes(inverted: boolean, tiny: SkPath, full: SkPath): SkPath[] {
-  return inverted ? [full, tiny] : [tiny, full]
-}
 
 // ──────────────────────────── Runtime shaders ─────────────────────────────
 
@@ -177,12 +107,13 @@ interface OverlayProps {
   imageNew: SkImage | null
   progress: SharedValue<number>
   params: OverlayParams
+  canvasRef?: React.RefObject<CanvasRef | null>
 }
 
 /** @internal Renders the active-mode subtree. Hooks are scoped per mode. */
-export function SkiaOverlay({ image, imageNew, progress, params }: OverlayProps) {
+export function SkiaOverlay({ image, imageNew, progress, params, canvasRef }: OverlayProps) {
   return (
-    <Canvas style={CANVAS_STYLE}>
+    <Canvas ref={canvasRef} style={CANVAS_STYLE}>
       {image && (
         <ActiveMode image={image} imageNew={imageNew} progress={progress} params={params} />
       )}
@@ -510,7 +441,9 @@ function useHeartPath(
       ),
     [originX, originY, heartSize, inverted],
   )
-  return usePathInterpolation(progress, KEYFRAME_INPUT, keyframes)
+  return useDerivedValue(() => {
+    return interpolatePaths(progress.value, KEYFRAME_INPUT, keyframes)
+  })
 }
 
 function useStarPath(
@@ -533,7 +466,9 @@ function useStarPath(
       ),
     [originX, originY, outer, inner, inverted],
   )
-  return usePathInterpolation(progress, KEYFRAME_INPUT, keyframes)
+  return useDerivedValue(() => {
+    return interpolatePaths(progress.value, KEYFRAME_INPUT, keyframes)
+  })
 }
 
 function PixelizeMode({ image, imageNew, progress, params }: DualModeProps) {

@@ -82,8 +82,8 @@ function ThemeSettings() {
 ```
 
 `preference` is the right field for persistence: it's the raw value
-the user picked (including `'system'`), updates synchronously inside
-`setTheme`, and stays in sync when the theme changes from anywhere
+the user picked (including `'system'`), is written when `setTheme`
+applies the new theme, and stays in sync when the theme changes from anywhere
 else (OS appearance, programmatic call). Write it to storage, read
 it back on startup, and pass it directly to `initialTheme`.
 

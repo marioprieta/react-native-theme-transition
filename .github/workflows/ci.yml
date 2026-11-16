@@ -18,16 +18,24 @@ jobs:
       - run: npm ci
       - run: npm run lint
 
-  typecheck:
-    name: Type Check
+  typecheck-build:
+    name: Type Check & Build (Skia ${{ matrix.skia }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        skia: ['2.4.18', '2.6.2', '2.14.0']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci
+      - run: cp package-lock.json "$RUNNER_TEMP/package-lock.json.before"
+      - run: npm install --no-save --package-lock=false @shopify/react-native-skia@${{ matrix.skia }}
       - run: npx tsc --noEmit
+      - run: npm run build
+      - run: cmp package-lock.json "$RUNNER_TEMP/package-lock.json.before"
 
   test:
     name: Test
@@ -39,14 +47,3 @@ jobs:
           node-version: '22'
       - run: npm ci
       - run: npm test
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm ci
-      - run: npm run build
