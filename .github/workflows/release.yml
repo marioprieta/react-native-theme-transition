@@ -27,12 +27,19 @@ jobs:
         with:
           # Pinned to 22.22.0 because Node 22.22.2's toolcache ships a corrupted
           # npm (missing `promise-retry` in @npmcli/arborist), which breaks the
-          # `npm install -g npm@latest` step needed to enable OIDC trusted
+          # `npm install -g npm@<pinned>` step needed to enable OIDC trusted
           # publishing. Revisit once the runner image is fixed upstream.
           node-version: '22.22.0'
 
+      # Pinned to an exact npm version instead of `npm@latest`: `latest` now
+      # resolves to npm 12.x, which declares `engines.node: ^22.22.2` and fails
+      # on the 22.22.0 toolcache above with EBADENGINE before any install or
+      # publish runs. npm 11.21.2 supports this Node version and still provides
+      # OIDC trusted publishing (npm >= 11.5.1), and the exact pin prevents
+      # future major-version engine drift. Revisit deliberately once the Node
+      # toolcache issue is fixed upstream.
       - name: Update npm for OIDC support
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.21.2
 
       - name: Install dependencies
         run: npm ci
